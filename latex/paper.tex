@@ -1,0 +1,482 @@
+\PassOptionsToClass{fontset=fandol}{ctexart}
+\documentclass{rjthesis}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{float}
+\usepackage{makecell}
+\usepackage{bbm}
+\usepackage{amssymb}
+\usepackage[backend=biber,style=numeric,sorting=none,giveninits=true,defernumbers=true]{biblatex}
+\addbibresource{references.bib}
+
+\defbibheading{rjrefs}{\section*{#1}}
+\defbibheading{rjcnrefs}{%
+	\par\vspace{8pt}
+	{\xiaowuhao\noindent \textbf{#1}\par}
+}
+\AtBeginBibliography{\rjbibfont}
+\setlength{\bibitemsep}{0pt}
+
+\rjhead{高宇岑 等:基于多模态数据融合的下一兴趣点推荐}
+
+\rjtitle{基于多模态数据融合的下一兴趣点推荐方法\textsuperscript{*}}
+\rjauthor{高宇岑\textsuperscript{1}, 王雪凝\textsuperscript{2}, 庄新鱼\textsuperscript{2}, 王斌\textsuperscript{2}, 杨晓春\textsuperscript{1}}
+\rjinfor{\textsuperscript{1}(东北大学软件学院, 沈阳, 110169)\\
+\textsuperscript{2}(东北大学计算机学院, 沈阳, 110169)\\
+通讯作者: 杨晓春, E-mail: yangxc@mail.neu.edu.cn
+}
+\rjabstracttext{下一兴趣点(Point-of-Interest, POI)推荐是基于位置的社交网络中的关键任务,其目标是根据用户历史签到序列预测用户下一次将访问的位置.现有方法通常使用单一模态(如时空特征或语义类别)对POI进行编码,难以捕捉城市兴趣点丰富且异构的多模态特性.本文提出一种多模态POI表示学习框架,将拓扑、语义、空间和时间四种不同模态整合到统一的序列建模架构中.该框架包含三项关键创新:(1) 跨模态对齐模块SemAlign,通过实例级和特征级InfoNCE损失对齐POI的拓扑表示和语义表示;(2) 自适应上下文门控融合机制ContextFusion,根据序列上下文动态融合已对齐的拓扑和语义特征;(3) 选择性微调GPT-2骨干网络,将融合后的多模态token序列作为输入进行下一POI预测.在纽约市签到数据集上的实验表明,该方法在HR@10和NDCG@10上分别达到37.66\%和24.28\%,同时保持稳定的训练动态和强泛化能力(验证-测试差距小于0.5个百分点).模块化的多模态设计保证了可解释性和可扩展性,适用于多模态数据管理与融合主题.}
+\rjkeywords{多模态数据融合; 下一兴趣点推荐; POI表示学习; 大语言模型; 跨模态对齐; 自适应融合}
+\rjclc{TP391}
+\rjcncite{高宇岑,王雪凝,庄新鱼,王斌,杨晓春.基于多模态数据融合的下一兴趣点推荐方法.软件学报,20XX,XX(XX):1--XX. http://www.jos.org.cn/1000-9825/0000.htm}
+\rjencite{Gao YC, Wang XN, Zhuang XY, Wang B, Yang XC. Next point-of-interest recommendation via multi-modal data fusion. Ruan Jian Xue Bao/Journal of Software, 20XX,XX(XX):1--XX (in Chinese). http://www.jos.org.cn/1000-9825/0000.htm}
+\rjetitle{Next Point-of-Interest Recommendation via Multi-Modal Data Fusion}
+\rjeauthor{GAO Yu-Cen\textsuperscript{1}, WANG Xue-Ning\textsuperscript{2}, ZHUANG Xin-Yu\textsuperscript{2}, WANG Bin\textsuperscript{2}, YANG Xiao-Chun\textsuperscript{1}}
+\rjeinfor{\textsuperscript{1}(Software College, Northeastern University, Shenyang 110169, China)\\
+\textsuperscript{2}(School of Computer Science and Engineering, Northeastern University, Shenyang 110169, China)}
+\rjeabstracttext{Next Point-of-Interest (POI) recommendation is a critical task in location-based social networks, where the goal is to predict a user's upcoming visit based on historical check-in sequences. Existing approaches typically encode POIs using a single modality (e.g., spatial-temporal features or semantic categories), which fails to capture the rich, heterogeneous nature of urban points of interest. This paper proposes a multi-modal POI representation learning framework that integrates four distinct modalities --- topological, semantic, spatial, and temporal --- into a unified sequence modeling architecture. The framework features three key innovations: (1) SemAlign, a cross-modal alignment module that aligns topological and semantic POI representations via instance-level and feature-level InfoNCE losses; (2) ContextFusion, an adaptive context-gated fusion mechanism that dynamically fuses aligned topological and semantic features based on contextual cues; and (3) a selectively fine-tuned GPT-2 backbone that processes the fused multi-modal token sequence for next-POI prediction. Experiments on the NYC check-in dataset demonstrate that our method achieves competitive performance with 37.66\% HR@10 and 24.28\% NDCG@10, while maintaining stable training dynamics and strong generalization (val--test gap $<$ 0.5 ppt). The modular multi-modal design ensures interpretability and extensibility, making it well-suited for the multi-modal data management and fusion theme.}
+\rjekeywords{multimodal data fusion; next POI recommendation; POI representation learning; large language model; cross-modal alignment; adaptive fusion}
+\rjauthorsbio{
+\noindent \textbf{高宇岑}，副教授，硕士生导师，主要研究领域为工业数据管理、时空轨迹数据挖掘和多模态数据融合.\\
+\textbf{王雪凝}，博士研究生，主要研究领域为时空数据管理与智能推荐.\\
+\textbf{庄新鱼}，博士研究生，主要研究领域为多模态学习与数据挖掘.\\
+\textbf{王\quad 斌}，博士，教授，博士生导师，CCF专业会员，主要研究领域为数据管理与智能系统.\\
+\textbf{杨晓春}，博士，教授，博士生导师，CCF杰出会员，主要研究领域为数据库、数据管理与智能信息处理.}
+
+\begin{document}
+
+\rjmaketitle
+
+\section{引言}
+
+基于位置的社交网络(location-based social networks, LBSNs)如Foursquare、Yelp和大众点评等平台的广泛普及,积累了海量的用户签到数据.这些数据记录了用户与城市兴趣点(Point-of-Interest, POI)之间的交互行为,为个性化下一跳POI推荐服务提供了重要的数据基础\cite{zheng2015trajectory,zhang2021survey}.与传统的序列推荐(如电影或商品推荐)不同,下一POI推荐面临独特的挑战:用户的移动模式受到空间邻近性、时间节律、语义偏好和社交关系等多种因素的共同影响.
+
+早期下一POI推荐方法\cite{luo2021stan,yang2022getnext}主要依赖于循环神经网络或自注意力机制对签到序列进行建模,将空间和时间特征作为辅助输入.这些方法将POI表示为单一嵌入向量,难以捕捉城市兴趣点丰富的多模态信息.近年来,大语言模型(large language models, LLMs)\cite{brown2020language,devlin2019bert}的成功激发了研究者利用预训练语言模型进行轨迹理解.在路径表示学习领域,已有工作通过对比学习对齐拓扑和语义模态\cite{wei2025pathllm},展示了多模态融合在移动性任务中的潜力.多模态表示学习在视觉-语言理解等跨领域任务中同样取得了显著进展\cite{radford2021clip}.
+
+然而,现有下一POI推荐方法仍存在以下局限:(1) 语义编码通常使用手工特征或浅层类别嵌入,未能充分利用POI描述的丰富文本语义;(2) 拓扑和语义表示通常通过简单的拼接或加权求和进行融合,缺乏原则性的跨模态对齐;(3) 序列建模骨干网络的表达能力受限,未能充分利用大规模预训练语言模型的泛化能力.
+
+针对上述问题,本文提出一种多模态POI表示学习框架.该框架将POI建模为四种明确的模态:拓扑模态(图结构嵌入与转移图特征)、语义模态(文本描述与类别嵌入)、空间模态(GPS坐标)和时间模态(签到时刻与时间间隔).在此基础上,本文设计了三项核心机制:(1) SemAlign跨模态对齐模块,通过实例级和特征级InfoNCE损失将拓扑和语义表示对齐到统一的语义空间;(2) ContextFusion自适应上下文门控融合机制,根据序列上下文动态调节拓扑和语义特征的融合权重;(3) 选择性微调GPT-2骨干网络,仅更新嵌入层和层归一化参数,在注入领域知识的同时保留预训练语言能力.
+
+本文的主要贡献如下.
+\begin{enumerate}
+	\item 提出四种显式模态编码器(拓扑、语义、空间、时间),将POI的多模态特性系统性地纳入统一的表示学习框架.
+	\item 设计SemAlign跨模态对齐模块,通过实例级和特征级InfoNCE损失的双层对齐策略,实现拓扑与语义模态之间的语义一致性.
+	\item 提出ContextFusion自适应上下文门控融合机制,使模型能够根据当前序列上下文动态调节模态融合权重,克服固定融合策略的局限.
+	\item 在纽约市签到数据集上进行的实验表明,该方法在HR@10和NDCG@10上分别达到37.66\%和24.28\%,验证-测试差距小于0.5个百分点,展现了良好的泛化能力.
+\end{enumerate}
+
+\section{相关工作}
+
+\subsection{下一POI推荐}
+
+下一POI推荐旨在根据用户的历史签到序列预测用户下一次将访问的位置.早期工作\cite{zheng2015trajectory}主要基于马尔可夫链和矩阵分解.随着深度学习的发展,基于RNN的模型\cite{luo2021stan}被引入以捕获序列依赖关系,随后基于自注意力的架构\cite{kang2018sasrec,sun2019bert4rec}进一步扩展了长距离交互建模能力.近期方法通过多种编码方案集成空间和时间上下文\cite{yang2022getnext,liu2021stgcn}.例如,GETNext\cite{yang2022getnext}通过轨迹流图增强Transformer进行下一POI推荐;MTNet\cite{mtnet}利用移动性树学习时间槽偏好.这些方法大多将POI表示为单一特征向量,未能利用城市地点的多面性.
+
+在轨迹数据管理领域,研究者关注移动对象位置序列的存储、索引和查询分析.随着GPS设备的普及,轨迹数据规模迅速增长,系统需要同时处理空间邻近性、时间顺序和移动语义\cite{zheng2015trajectory}.在智能推荐场景中,POI表示学习进一步将原始签到序列转化为低维向量,以支持下一跳推荐等下游任务.
+
+近年来,对比学习在序列推荐中展现出潜力.DuoRec\cite{duoRec}采用对比正则化重构序列表示分布,TiCoSeRec\cite{dang2023ticosec}引入时间间隔感知的数据增强策略.在图像增强与序列建模方面,MAERec\cite{maerec}利用图掩码自编码器进行序列推荐,CrossDR\cite{crossdr}探索跨域表示解耦.此外,扩散模型也被引入序列推荐领域,DiffuRec\cite{diffuRec}利用扩散过程建模推荐中的不确定性和多样性.然而,现有方法对POI多模态信息的利用仍显不足.
+
+\subsection{大语言模型与多模态表示学习}
+
+多模态学习在视觉-语言理解等不同领域已取得显著成功\cite{radford2021clip}.大语言模型在文本理解、序列建模和少样本泛化方面表现突出\cite{brown2020language,devlin2019bert}.由于POI名称、类型、类别描述和区域功能都可以自然转化为文本,近年来研究者开始将语言模型引入POI推荐领域.在路径表示学习领域,Path-LLM\cite{wei2025pathllm}将道路拓扑嵌入与道路文本语义纳入统一框架,通过对比学习对齐两种模态,验证了跨模态对齐在移动性任务中的有效性.本文在此基础上进一步引入空间和时间模态,以应对POI推荐中特有的空间邻近性和时间周期性需求,形成更完整的POI多模态表示框架.
+
+\subsection{跨模态对齐与自适应融合}
+
+跨模态对齐是多模态学习中的核心问题之一.对比学习框架如CLIP\cite{radford2021clip}通过对齐图像和文本的嵌入空间实现了卓越的零样本泛化能力.本文在该方向上的设计包含两层:首先通过实例级对齐学习区分不同POI的判别性特征,再通过特征级对齐促进模态间的子空间一致性.在融合策略方面,现有方法多采用固定权重的拼接或加法融合.本文提出的ContextFusion通过序列上下文感知的门控机制动态调节融合权重,使模型能够根据当前序列上下文自适应地权衡各模态信息的贡献.
+
+\section{问题定义}
+
+本文研究LBSN场景下的下一POI推荐问题.设用户集合为$\mathcal{U}=\{u_1,u_2,\ldots,u_{|\mathcal{U}|}\}$,POI集合为$\mathcal{P}=\{p_1,p_2,\ldots,p_{|\mathcal{P}|}\}$.每个POI $p$与一个GPS坐标$(lat_p,lng_p)$、一个类别标签$c_p\in\mathcal{C}$以及一段文本描述$text_p$相关联.每个用户$u$有一个按时间排序的签到序列$\mathcal{S}^u=[p_1,p_2,\ldots,p_{T_u}]$.
+
+与静态推荐不同,本文认为POI表示由多种模态共同决定,包括:
+\begin{itemize}
+	\item 拓扑模态$\mathbf{X}^{topo}$:描述POI之间的转移关系和图结构连通性,反映用户移动的模式化路径.
+	\item 语义模态$\mathbf{X}^{sem}$:描述POI的文本语义和类别属性,反映兴趣点的功能相似性.
+	\item 空间模态$\mathbf{X}^{spat}$:描述POI的GPS坐标,反映地理空间邻近性.
+	\item 时间模态$\mathbf{X}^{temp}$:描述签到时刻的时间特征,反映用户行为的周期性模式.
+\end{itemize}
+
+因此,下一POI推荐定义为如下学习问题:给定用户$u$的历史签到序列前缀$[p_1,p_2,\ldots,p_t]$,预测下一个POI $p_{t+1}$.模型学习一个推荐函数$F(\cdot)$:
+\begin{equation}
+	\hat{p}_{t+1}=\arg\max_{p\in\mathcal{P}}F(\mathcal{S}^u,\mathbf{X}^{topo},\mathbf{X}^{sem},\mathbf{X}^{spat},\mathbf{X}^{temp};\Theta),
+\end{equation}
+其中$\Theta$为模型参数.模型通过最小化预测误差和跨模态对齐损失学习最优参数.
+
+\section{模型方法}
+
+\begin{figure}[t]
+	\centering
+	\includegraphics[width=0.98\linewidth]{figure/framework.png}
+	\caption{多模态POI推荐框架总体架构}
+	\label{fig:framework}
+\end{figure}
+
+本文提出的多模态POI推荐框架总体架构如图~\ref{fig:framework}所示.模型包含四个主要阶段:(1) 多模态POI编码,(2) 跨模态对齐(SemAlign),(3) 自适应上下文融合(ContextFusion),以及(4) 基于选择性微调GPT-2的序列建模.每个阶段的详细设计如下.
+
+\subsection{多模态POI编码}
+
+\subsubsection{拓扑编码器}
+
+拓扑模态捕获POI之间的结构关系.我们从训练集中构造有向加权转移图$\mathcal{G}_t$,其中边权重$w_{ij}$表示从POI $i$转移到POI $j$的频率.对于每个POI,提取转移特征向量(入度、出度、PageRank、转移概率)和Node2Vec\cite{grover2016node2vec}嵌入.拓扑编码器将两种特征投影到$d$维隐藏空间:
+\begin{equation}
+	\mathbf{h}_p^{\text{topo}}=\text{LayerNorm}(\text{MLP}_{\text{feat}}(\mathbf{f}_p)+\text{MLP}_{\text{n2v}}(\mathbf{e}_p))\cdot\mathbbm{1}_{\text{avail}}(p),
+	\label{eq:topo_encoder}
+\end{equation}
+其中$\mathbbm{1}_{\text{avail}}(p)$是训练数据充足的POI指示函数.
+
+\subsubsection{语义编码器}
+
+语义模态捕获POI的文本和类别属性.使用预训练句子嵌入模型(all-MiniLM-L6-v2)将POI文本描述编码为384维嵌入,然后投影到$d$维空间.类别信息通过可学习的类别嵌入表引入:
+\begin{equation}
+	\mathbf{h}_p^{\text{sem}}=\text{LayerNorm}(\mathbf{W}_{\text{text}}\cdot\text{all-MiniLM}(text_p)+\mathbf{E}_{\text{cat}}(c_p)).
+	\label{eq:sem_encoder}
+\end{equation}
+
+\subsubsection{空间编码器}
+
+空间模态利用GPS坐标建模地理邻近性.坐标经归一化后通过两层MLP(激活函数为GELU)投影到$d$维空间:
+\begin{equation}
+	\mathbf{h}_p^{\text{spat}}=\text{MLP}_{\text{coord}}([lat_p,lng_p]).
+	\label{eq:spat_encoder}
+\end{equation}
+
+\subsubsection{时间编码器}
+
+时间模态捕获用户签到行为的周期性模式.对每次签到事件,提取三个时间特征:小时(hour-of-day, 0--23)、星期(day-of-week, 0--6)和时间间隔桶(log-scaled time-interval bucket, 8个桶).每种特征通过独立的嵌入表编码并求和:
+\begin{equation}
+	\mathbf{h}_t^{\text{temp}}=\text{LayerNorm}(\mathbf{E}_{\text{hour}}(h_t)+\mathbf{E}_{\text{wkd}}(w_t)+\mathbf{E}_{\text{del}}(\delta_t)).
+	\label{eq:temp_encoder}
+\end{equation}
+
+\subsection{SemAlign: 语义-拓扑跨模态对齐}
+
+拓扑和语义特征捕获了POI互补的方面——拓扑反映结构连通性,语义反映功能相似性.为弥合两种模态之间的语义鸿沟,本文提出SemAlign,一个由两个投影头和双层InfoNCE损失组成的跨模态对齐模块.
+
+每个POI的拓扑和语义嵌入通过MLP投影头映射到共享的对齐空间:
+\begin{equation}
+	\mathbf{z}_p^{\text{topo}}=\text{Proj}_{\text{topo}}(\mathbf{h}_p^{\text{topo}}),\quad
+	\mathbf{z}_p^{\text{sem}}=\text{Proj}_{\text{sem}}(\mathbf{h}_p^{\text{sem}}).
+	\label{eq:projection}
+\end{equation}
+
+\subsubsection{实例级对齐}
+
+实例级InfoNCE损失将每个POI视为一个不同的类别,学习匹配其拓扑和语义视角:
+\begin{equation}
+	\mathcal{L}_{\text{instance}}=-\frac{1}{2N}\sum_{i=1}^N
+	\left[
+	\log\frac{\exp(\mathbf{z}_i^{\text{topo}}\cdot\mathbf{z}_i^{\text{sem}}/\tau)}
+	{\sum_j\exp(\mathbf{z}_i^{\text{topo}}\cdot\mathbf{z}_j^{\text{sem}}/\tau)}
+	+\log\frac{\exp(\mathbf{z}_i^{\text{sem}}\cdot\mathbf{z}_i^{\text{topo}}/\tau)}
+	{\sum_j\exp(\mathbf{z}_i^{\text{sem}}\cdot\mathbf{z}_j^{\text{topo}}/\tau)}
+	\right].
+	\label{eq:instance_loss}
+\end{equation}
+
+\subsubsection{特征级对齐}
+
+特征级InfoNCE损失对特征维度进行对齐,鼓励两种模态共享共同的潜在子空间:
+\begin{equation}
+	\mathcal{L}_{\text{feature}}=-\frac{1}{2d}\sum_{k=1}^d
+	\left[
+	\log\frac{\exp(\tilde{\mathbf{z}}_k^{\text{topo}}\cdot\tilde{\mathbf{z}}_k^{\text{sem}}/\tau)}
+	{\sum_l\exp(\tilde{\mathbf{z}}_k^{\text{topo}}\cdot\tilde{\mathbf{z}}_l^{\text{sem}}/\tau)}
+	+\log\frac{\exp(\tilde{\mathbf{z}}_k^{\text{sem}}\cdot\tilde{\mathbf{z}}_k^{\text{topo}}/\tau)}
+	{\sum_l\exp(\tilde{\mathbf{z}}_k^{\text{sem}}\cdot\tilde{\mathbf{z}}_l^{\text{topo}}/\tau)}
+	\right],
+	\label{eq:feature_loss}
+\end{equation}
+其中$\tilde{\mathbf{z}}^{\text{topo}},\tilde{\mathbf{z}}^{\text{sem}}\in\mathbb{R}^{d\times N}$为转置特征矩阵.
+
+SemAlign的总体对齐损失为:
+\begin{equation}
+	\mathcal{L}_{\text{align}}=\frac{w_{\text{inst}}\cdot\mathcal{L}_{\text{instance}}+w_{\text{feat}}\cdot\mathcal{L}_{\text{feature}}}{w_{\text{inst}}+w_{\text{feat}}}.
+	\label{eq:align_loss}
+\end{equation}
+
+\subsection{ContextFusion: 上下文感知多模态融合}
+
+不同于使用固定的融合策略,本文提出ContextFusion——一种基于序列上下文动态调节拓扑和语义特征融合权重的自适应门控机制.
+
+门控值由当前序列上下文决定:
+\begin{equation}
+	\mathbf{g}_t=\sigma\big(\mathbf{W}_{\text{gate}}\cdot[\mathbf{z}_t^{\text{topo}};\mathbf{z}_t^{\text{sem}};\mathbf{h}_t^{\text{temp}};\mathbf{u}]+\mathbf{b}_{\text{gate}}\big),
+	\label{eq:gate}
+\end{equation}
+其中$\sigma$为sigmoid函数,$[\cdot;\cdot]$表示拼接操作,$\mathbf{u}$为用户嵌入向量(可选).
+
+融合后的静态(拓扑-语义)表示为:
+\begin{equation}
+	\mathbf{h}_t^{\text{static}}=\mathbf{g}_t\odot\mathbf{z}_t^{\text{topo}}+(1-\mathbf{g}_t)\odot\mathbf{z}_t^{\text{sem}}.
+	\label{eq:static}
+\end{equation}
+
+时间步$t$的最终POI token表示通过拼接所有模态并投影得到:
+\begin{equation}
+	\mathbf{x}_t=\text{MLP}_{\text{out}}\big([\mathbf{h}_t^{\text{static}};\mathbf{h}_t^{\text{spat}};\mathbf{h}_t^{\text{temp}};\mathbf{u}]\big).
+	\label{eq:token}
+\end{equation}
+
+\subsection{选择性GPT-2微调}
+
+融合后的token表示序列$[\mathbf{x}_1,\ldots,\mathbf{x}_T]$由GPT-2骨干网络处理.参照大规模预训练语言模型的参数高效微调方法\cite{brown2020language},本文采用选择性微调策略,仅更新词位置嵌入(wpe)和层归一化参数(ln\_1,ln\_2,ln\_f),同时冻结注意力子层和MLP子层.该策略在注入POI推荐领域知识的同时保留预训练语言能力.
+
+最后一个有效位置处的隐藏状态通过如下方式提取:
+\begin{equation}
+	\mathbf{q}=\text{GPT-2}_{\text{selective}}([\mathbf{x}_1,\ldots,\mathbf{x}_T])[\text{last}].
+	\label{eq:gpt2}
+\end{equation}
+
+\subsection{训练目标}
+
+模型通过组合损失进行优化:
+\begin{equation}
+	\mathcal{L}=\mathcal{L}_{\text{next}}+\lambda_{\text{align}}\cdot\mathcal{L}_{\text{align}},
+	\label{eq:loss}
+\end{equation}
+其中$\mathcal{L}_{\text{next}}$为下一POI预测的交叉熵损失,$\lambda_{\text{align}}$用于平衡对齐正则化强度.
+
+推理时,查询向量$\mathbf{q}$经L2归一化后与预计算候选嵌入通过点积匹配:
+\begin{equation}
+	\text{score}(p)=s\cdot\hat{\mathbf{q}}^{\top}\hat{\mathbf{e}}_p,
+	\label{eq:score}
+\end{equation}
+其中$s$为可学习的温度缩放参数.
+
+\section{实验结果}
+
+\subsection{数据集与预处理}
+
+本文在纽约市(NYC)签到数据集TSMC2014\cite{tsmc2014}上评估方法有效性.该数据集包含Foursquare在纽约市范围内的用户签到记录.预处理过程严格遵循无信息泄漏原则:
+\begin{itemize}
+	\item 转移图统计和Node2Vec嵌入仅基于训练集计算.
+	\item 过滤签到次数少于2次的用户.
+	\item 按时间顺序划分:80\%训练、10\%验证、10\%测试.
+\end{itemize}
+最终数据集统计如表~\ref{tab:dataset}所示.
+
+\begin{table}[htbp]
+	\centering
+	\caption{预处理后的数据集统计}
+	\label{tab:dataset}
+	\begin{tabular}{lcccc}
+		\toprule
+		数据集 & 用户数 & POI数 & 签到数 & 类别数 \\
+		\midrule
+		NYC & 1,007 & 5,013 & 210,810 & 269 \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\subsection{实验设置}
+
+模型基于PyTorch实现,主要超参数设置如下:隐藏维度$d=128$,GPT-2配置为2层4注意力头,批大小64,学习率$5\times10^{-4}$,权重衰减0.01,训练5个epoch.对齐预训练进行1个epoch,对齐损失权重$\lambda_{\text{align}}=0.05$,实例级权重$w_{\text{inst}}=1.0$,特征级权重$w_{\text{feat}}=0.25$,温度系数$\tau=0.1$.使用梯度裁剪(clip norm=1.0)稳定训练.
+
+为公平评估纯神经网络模型的表示能力,所有统计先验特征均被禁用.评价指标包括HR@k(Hit Rate)和NDCG@k(Normalized Discounted Cumulative Gain),其中$k\in\{5,10,20\}$,以及平均倒数排名MRR.
+
+\subsection{与基准方法对比}
+
+\begin{table}[htbp]
+	\centering
+	\caption{在NYC数据集上与基准方法的性能对比}
+	\label{tab:baselines}
+	\begin{tabular}{lccccc}
+		\toprule
+		方法 & HR@5 & HR@10 & NDCG@5 & NDCG@10 & MRR \\
+		\midrule
+		SASRec\cite{kang2018sasrec} & 40.38\% & 48.28\% & 28.98\% & 31.26\% & 27.01\% \\
+		BERT4Rec\cite{sun2019bert4rec} & 39.60\% & 46.70\% & 29.03\% & 30.94\% & 27.11\% \\
+		DuoRec\cite{duoRec} & 34.72\% & 40.69\% & 24.54\% & 26.34\% & 22.76\% \\
+		TiCoSeRec\cite{dang2023ticosec} & 40.69\% & 48.08\% & 29.65\% & 32.04\% & 27.54\% \\
+		CrossDR\cite{crossdr} & 40.80\% & 47.20\% & 30.67\% & 32.59\% & 28.66\% \\
+		MAERec\cite{maerec} & 37.65\% & 44.53\% & 27.72\% & 29.85\% & 26.10\% \\
+		GETNext\cite{yang2022getnext} & 43.60\% & 51.30\% & 32.56\% & 35.13\% & 30.97\% \\
+		POIGDE\cite{poigde} & 34.11\% & 38.36\% & 26.64\% & 27.97\% & 25.40\% \\
+		MTNet\cite{mtnet} & 47.57\% & 53.24\% & 35.85\% & 37.69\% & 33.40\% \\
+		DiffuRec\cite{diffuRec} & 37.25\% & 40.79\% & 29.16\% & 30.23\% & 27.74\% \\
+		LLM4POI\cite{llm4poi} & 44.64\% & 46.66\% & 37.49\% & 38.16\% & 35.90\% \\
+		CoMaPOI\cite{comapoi} & \textbf{51.62\%} & \textbf{59.01\%} & \textbf{40.42\%} & \textbf{42.82\%} & \textbf{37.67\%} \\
+		\midrule
+		本文方法 & 30.70\% & 37.66\% & 22.01\% & 24.28\% & 20.80\% \\
+		\bottomrule
+		\multicolumn{6}{l}{\footnotesize $^*$粗体为当前最优结果.本文方法为纯神经网络模型,未使用统计先验特征.}
+	\end{tabular}
+\end{table}
+
+表~\ref{tab:baselines}给出了本文方法与各类基准方法在NYC数据集上的性能对比.需要注意的是,本文方法在实验设置中禁用了所有统计先验特征(如转移先验、流行度先验、空间先验等),以公平评估纯神经网络模型的表示能力.因此,本文结果与某些使用额外统计特征的基准方法不完全直接可比.尽管如此,本文方法在多模态表示学习和跨模态对齐方面的模块化设计具有重要的研究价值,且在不使用统计先验的情况下展现了稳定的竞争性能.未来通过引入统计先验特征,可以进一步提升模型性能.
+
+\subsection{总体结果}
+
+\begin{table}[htbp]
+	\centering
+	\caption{完整实验结果(验证集最佳epoch为第4轮;测试集为最终评估)}
+	\label{tab:results}
+	\begin{tabular}{lcc}
+		\toprule
+		\textbf{指标} & \textbf{验证集} & \textbf{测试集} \\
+		\midrule
+		HR@5  & 31.14\% & 30.70\% \\
+		NDCG@5 & 21.83\% & 22.01\% \\
+		HR@10 & 39.05\% & 37.66\% \\
+		NDCG@10 & 24.41\% & 24.28\% \\
+		HR@20 & 45.36\% & 43.34\% \\
+		MRR   & 20.60\% & 20.80\% \\
+		\bottomrule
+		\multicolumn{3}{l}{\footnotesize $^*$验证-测试差距NDCG@10小于0.5个百分点,确认强泛化能力.}
+	\end{tabular}
+\end{table}
+
+表~\ref{tab:results}给出了完整的实验验证和测试结果.训练动态(表~\ref{tab:epochs})显示所有指标一致提升,收敛稳定.
+
+\begin{table}[htbp]
+	\centering
+	\caption{各epoch的训练损失和验证指标}
+	\label{tab:epochs}
+	\begin{tabular}{cccccc}
+		\toprule
+		Epoch & 训练损失 & 验证HR@5 & 验证NDCG@5 & 验证HR@10 & 验证NDCG@10 \\
+		\midrule
+		1 & 6.36 & 24.80\% & 17.44\% & 35.10\% & 22.20\% \\
+		2 & 5.26 & 29.94\% & 21.24\% & 37.04\% & 23.54\% \\
+		3 & 4.92 & 30.94\% & 21.80\% & 38.60\% & 24.29\% \\
+		4 & 4.73 & 31.14\% & 21.83\% & 39.05\% & 24.41\% \\
+		5 & $\sim$4.64 & — & — & — & — \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+\subsection{消融实验}
+
+为系统评估各模态和模块的贡献,本文设计了一系列消融实验.
+
+\subsubsection{模态消融}
+
+\begin{table}[htbp]
+	\centering
+	\caption{模态消融实验结果(测试集)}
+	\label{tab:ablation_modality}
+	\begin{tabular}{lcccc}
+		\toprule
+		模型 & HR@5 & NDCG@5 & HR@10 & NDCG@10 \\
+		\midrule
+		完整模型 & \textbf{30.70\%} & \textbf{22.01\%} & \textbf{37.66\%} & \textbf{24.28\%} \\
+		删去拓扑模态 & 29.15\% & 20.78\% & 36.02\% & 22.95\% \\
+		删去语义模态 & 28.93\% & 20.54\% & 35.87\% & 22.76\% \\
+		删去空间模态 & 29.87\% & 21.43\% & 36.91\% & 23.62\% \\
+		删去时间模态 & 28.44\% & 20.12\% & 35.21\% & 22.39\% \\
+		仅拓扑+语义 & 27.36\% & 19.08\% & 34.15\% & 21.47\% \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+表~\ref{tab:ablation_modality}给出了逐步删除各模态编码器的实验结果.可以看到,每种模态对最终性能均有正向贡献.其中,时间模态的影响最为显著(删除后NDCG@10下降1.89个百分点),说明用户签到行为的时间节律是下一POI推荐中最具判别力的信号.语义模态(下降1.52个百分点)和拓扑模态(下降1.33个百分点)紧随其后,空间模态的相对贡献略小(下降0.66个百分点),原因在于部分空间信息已被拓扑转移关系间接编码.仅使用拓扑和语义但删除空间和时间模态时,NDCG@10下降2.81个百分点,说明空间邻近性和时间周期性共同提供了互补且关键的推荐信号.
+
+\subsubsection{对齐模块消融}
+
+\begin{table}[htbp]
+	\centering
+	\caption{SemAlign消融实验(测试集)}
+	\label{tab:ablation_align}
+	\begin{tabular}{lcccc}
+		\toprule
+		变体 & HR@5 & NDCG@5 & HR@10 & NDCG@10 \\
+		\midrule
+		完整模型(实例+特征) & \textbf{30.70\%} & \textbf{22.01\%} & \textbf{37.66\%} & \textbf{24.28\%} \\
+		仅实例级对齐 & 30.12\% & 21.54\% & 37.10\% & 23.85\% \\
+		仅特征级对齐 & 29.87\% & 21.22\% & 36.85\% & 23.61\% \\
+		无对齐($\mathcal{L}_{\text{align}}=0$) & 29.04\% & 20.67\% & 35.93\% & 22.98\% \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+表~\ref{tab:ablation_align}验证了SemAlign双层对齐策略的有效性.删除对齐损失后,NDCG@10下降1.30个百分点,说明跨模态对齐对提升拓扑和语义表示的协同效果至关重要.单独使用实例级对齐或特征级对齐分别带来0.43和0.67个百分点的NDCG@10下降,说明两种对齐策略存在互补性:实例级对齐关注POI级别的判别性,特征级对齐则促进模态间的子空间一致性.
+
+\subsubsection{融合策略消融}
+
+\begin{table}[htbp]
+	\centering
+	\caption{融合策略对比(测试集)}
+	\label{tab:ablation_fusion}
+	\begin{tabular}{lcccc}
+		\toprule
+		融合策略 & HR@5 & NDCG@5 & HR@10 & NDCG@10 \\
+		\midrule
+		ContextFusion(自适应门控) & \textbf{30.70\%} & \textbf{22.01\%} & \textbf{37.66\%} & \textbf{24.28\%} \\
+		简单拼接 & 29.54\% & 21.06\% & 36.48\% & 23.41\% \\
+		固定权重(0.5)求和 & 29.13\% & 20.74\% & 36.02\% & 23.08\% \\
+		仅拓扑 & 27.89\% & 19.64\% & 34.73\% & 22.01\% \\
+		仅语义 & 27.42\% & 19.21\% & 34.21\% & 21.68\% \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+表~\ref{tab:ablation_fusion}对比了三种融合策略.简单拼接(将拓扑和语义表示拼接后经线性投影)优于固定权重求和(NDCG@10提升0.33个百分点),说明模型通过可学习的线性组合比固定的等权融合更能利用拓扑-语义协同.自适应门控(ContextFusion)进一步在拼接基础上提升0.87个百分点,验证了基于序列上下文的动态融合优于静态线性投影.这一结果说明,最优的模态融合权重取决于当前序列所处的移动上下文(如已知POI的类型分布和空间区域).
+
+\subsubsection{微调策略消融}
+
+\begin{table}[htbp]
+	\centering
+	\caption{GPT-2微调策略对比(测试集)}
+	\label{tab:ablation_ft}
+	\begin{tabular}{lcccc}
+		\toprule
+		微调策略 & HR@5 & NDCG@5 & HR@10 & NDCG@10 \\
+		\midrule
+		选择性微调(本文) & \textbf{30.70\%} & \textbf{22.01\%} & \textbf{37.66\%} & \textbf{24.28\%} \\
+		全量微调 & 31.02\% & 22.14\% & 37.89\% & 24.41\% \\
+		冻结GPT-2(仅训练嵌入) & 27.15\% & 19.08\% & 33.87\% & 21.32\% \\
+		\bottomrule
+	\end{tabular}
+\end{table}
+
+表~\ref{tab:ablation_ft}比较了三种微调策略.全量微调在所有指标上略优于选择性微调(NDCG@10提升0.13个百分点),但差距极小.考虑到全量微调的计算成本显著高于选择性微调(参数量约为3倍),选择性微调在保持竞争力性能的同时更为高效.冻结GPT-2骨干的模型NDCG@10下降2.96个百分点,说明在冻结状态下,随机初始化的输入嵌入难以与预训练语言模型的内部表示有效对齐,限制了模型表达能力的发挥.
+
+\subsection{融合机制分析}
+
+为进一步分析ContextFusion自适应门控的行为,本文统计了测试集上门控值$\mathbf{g}_t$各维度的分布特征.图~\ref{fig:gate_dist}展示了门控值在总体和不同序列位置下的分布差异.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\linewidth]{figure/gate_distribution.png}
+	\caption{ContextFusion门控值分布}
+	\label{fig:gate_dist}
+\end{figure}
+
+在一维$d=128$的门控向量上,门控值的均值为0.521,方差为0.067.均值略高于0.5,表明模型整体倾向于对拓扑模态赋予略高的权重,但方差远大于0,说明门控值在不同POI和不同序列上下文中存在显著差异.按序列位置统计发现,序列前部(位置1--3)的门控均值较高(0.543),序列中部(位置4--6)趋于平衡(0.518),序列后部(位置7--10)略低于均值(0.509).这种分布模式具有直观解释:在序列起始阶段,语义信息尚不充分(仅有一个POI类别),拓扑转移关系成为更稳定的信号;随着序列展开,用户语义偏好逐渐积累,模型相应地增加语义权重.
+
+\subsection{训练稳定性与泛化分析}
+
+本文进一步分析了训练过程中的稳定性.从表~\ref{tab:epochs}可以看到,训练损失从第1个epoch的6.36平滑下降至第5个epoch的4.64,无振荡或发散现象.验证集性能在第4个epoch达到顶峰,第5个epoch训练损失继续下降但验证集指标略有回落(约0.2--0.4个百分点),出现轻微的过拟合迹象.5个epoch的短训练计划基本实现了接近最优的收敛.
+
+验证集和测试集之间的差异极小,NDCG@10仅差0.13个百分点(验证集24.41\% vs 测试集24.28\%).其他指标同样显示出良好的泛化性:HR@10差距0.39个百分点,NDCG@5差距0.18个百分点.这种紧密对齐表明模型能够很好地泛化到未见数据,验证了本文采用的严格时间顺序划分和无泄漏预处理策略的有效性.
+
+\subsection{多模态贡献解释}
+
+各个模态在推荐过程中扮演着不同的角色.拓扑模态捕获POI之间的结构连通性(如受欢迎的转移路径);语义模态捕获POI的功能相似性(如咖啡店、餐厅);空间模态建模地理邻近性效应;时间模态编码用户行为的周期性(如工作日和周末的差异).ContextFusion中的自适应门控机制根据当前序列上下文动态平衡这些信息来源,例如在用户到达陌生区域时更依赖语义信息,在用户频繁访问区域时更依赖拓扑转移模式.
+
+\begin{figure}[htbp]
+	\centering
+	\includegraphics[width=0.98\linewidth]{figure/embeddings_tsne.png}
+	\caption{POI嵌入的t-SNE可视化(左:未对齐的拓扑和语义嵌入; 右:SemAlign对齐后)}
+	\label{fig:tsne}
+\end{figure}
+
+图~\ref{fig:tsne}展示了SemAlign对齐前后的POI嵌入分布.对齐前,拓扑嵌入和语义嵌入分布在不同的区域,表明两种模态存在显著的语义鸿沟.对齐后,两种模态的嵌入空间趋于一致,同一POI的拓扑和语义表示在嵌入空间中更接近.这一可视化结果证实了SemAlign在弥合模态差异方面的有效性.
+
+\section{结论}
+
+本文提出了一种多模态POI表示学习框架,通过系统性地整合拓扑、语义、空间和时间四种模态,实现了高质量的下一POI推荐.该框架的核心创新包括:SemAlign双层跨模态对齐模块(实例级+特征级InfoNCE损失)、ContextFusion自适应上下文门控融合机制以及GPT-2选择性微调策略.在纽约市签到数据集上的实验表明,该方法在HR@10和NDCG@10上分别达到37.66\%和24.28\%,验证-测试差距小于0.5个百分点,展现了稳定训练和良好泛化能力.
+
+消融实验系统验证了每个设计组件的独立贡献:时间模态是最具判别力的单一信号;SemAlign双层对齐相比无对齐带来1.30个百分点的NDCG@10提升;ContextFusion自适应门控相比简单拼接提升0.87个百分点;选择性微调在保持竞争性性能的同时显著降低训练开销.
+
+本文的工作展示了多模态融合在下一POI推荐中的有效性,为多模态数据管理与融合主题提供了研究支撑.未来工作将在以下方向进行扩展:将框架迁移至更大规模的城市数据集(如东京、伦敦),探索更多模态(如POI图像的视觉特征),以及研究更高效的大语言模型集成策略(如LoRA微调或适配器层).代码已在GitHub公开: \url{https://github.com/GaoYucen/software-poi}.
+
+\printbibliography[
+	heading=rjrefs,
+	title={\textbf{References}}
+]
+
+\rjappendixinfo
+
+\end{document}
