@@ -1,0 +1,33 @@
+city: NYC
+raw_path: data/dataset_TSMC2014_NYC.txt
+processed_dir: processed/debug_nyc
+run_dir: runs/debug
+
+max_seq_len: 12
+min_user_checkins: 2
+batch_size: 16
+num_workers: 0
+
+hidden_dim: 64
+topology_dim: 64
+semantic_dim: 64
+temporal_dim: 64
+user_dim: 64
+gpt_model_name: gpt2
+use_pretrained_gpt: false
+freeze_gpt: false
+unfreeze_last_n: 0
+gpt_layers: 1
+gpt_heads: 2
+dropout: 0.1
+
+lr: 0.001
+weight_decay: 0.0
+epochs: 1
+align_loss_weight: 0.05
+gradient_clip: 1.0
+device: auto
+seed: 42
+
+metrics_k: [5, 10, 20]
+

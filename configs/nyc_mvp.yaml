@@ -1,0 +1,32 @@
+city: NYC
+raw_path: data/dataset_TSMC2014_NYC.txt
+processed_dir: processed/NYC
+run_dir: runs/nyc_mvp
+
+max_seq_len: 20
+min_user_checkins: 2
+batch_size: 64
+num_workers: 0
+
+hidden_dim: 128
+topology_dim: 128
+semantic_dim: 128
+temporal_dim: 128
+user_dim: 128
+gpt_model_name: gpt2
+use_pretrained_gpt: true
+freeze_gpt: true
+unfreeze_last_n: 1
+gpt_layers: 2
+gpt_heads: 4
+dropout: 0.1
+
+lr: 0.0005
+weight_decay: 0.01
+epochs: 5
+align_loss_weight: 0.05
+gradient_clip: 1.0
+device: auto
+seed: 42
+
+metrics_k: [5, 10, 20]
