@@ -1,0 +1,55 @@
+{
+  "city": "NYC",
+  "schema_version": 4,
+  "preprocess_fingerprint": "f2cc1b6ac4f048e8062e085c80f72ba04a51700265366fe1b39e302481566b62",
+  "preprocess_config": {
+    "schema_version": 4,
+    "raw_path": "data/dataset_TSMC2014_NYC.txt",
+    "raw_sha256": "2f39ce698e5bff6683c74bec30c436cc022c160b0f3d73c5268b55491b2445f9",
+    "city": "NYC",
+    "max_seq_len": 20,
+    "min_user_checkins": 2,
+    "val_ratio": 0.1,
+    "test_ratio": 0.1,
+    "limit_users": null,
+    "node2vec_dim": 128,
+    "node2vec_walk_length": 20,
+    "node2vec_num_walks": 10,
+    "node2vec_p": 1.0,
+    "node2vec_q": 1.0,
+    "text_encoder": "hf_transformer",
+    "text_embedding_dim": 384,
+    "text_model_name": "sentence-transformers/all-MiniLM-L6-v2",
+    "seed": 42
+  },
+  "raw_path": "data/dataset_TSMC2014_NYC.txt",
+  "max_seq_len": 20,
+  "num_users": 1083,
+  "num_pois": 38333,
+  "num_categories": 400,
+  "node2vec_dim": 128,
+  "text_encoder": "hf_transformer",
+  "text_embedding_dim": 384,
+  "text_model_name": "sentence-transformers/all-MiniLM-L6-v2",
+  "num_transition_edges": 133305,
+  "train_transition_weight_sum": 180873.0,
+  "train_adjacent_transition_count": 180873,
+  "train_seen_pois": 34172,
+  "num_user_poi_edges": 75677,
+  "train_user_poi_weight_sum": 181956.0,
+  "topology_available_pois": 34172,
+  "coord_mean": [
+    40.75178527832031,
+    -73.97417449951172
+  ],
+  "coord_std": [
+    0.07251353561878204,
+    0.0913720577955246
+  ],
+  "split_sizes": {
+    "train": 180873,
+    "val": 22736,
+    "test": 22736
+  },
+  "split_protocol": "user_chronological_ratio"
+}

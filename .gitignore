@@ -6,8 +6,9 @@ __pycache__/
 # Local data and generated artifacts
 data/*.txt
 !data/*readme*.txt
-processed/
-runs/
+
+# Keep processed/ and runs/ ignored in general to avoid accidentally committing non-LFS files
+# LFS-tracked files are force-added separately
 
 # Virtual environments and local editor state
 .venv/

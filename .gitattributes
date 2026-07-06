@@ -1,0 +1,7 @@
+runs/nyc_mvp/best.pt filter=lfs diff=lfs merge=lfs -text
+runs/nyc_mvp/alignment_pretrain.pt filter=lfs diff=lfs merge=lfs -text
+processed/NYC/arrays.npz filter=lfs diff=lfs merge=lfs -text
+processed/NYC/train.json filter=lfs diff=lfs merge=lfs -text
+processed/NYC/val.json filter=lfs diff=lfs merge=lfs -text
+processed/NYC/test.json filter=lfs diff=lfs merge=lfs -text
+runs/nyc_mvp/config.json filter=lfs diff=lfs merge=lfs -text
