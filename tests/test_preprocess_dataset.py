@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 from poi_rec.data.dataset import POISequenceDataset, load_metadata, load_processed_arrays
-from poi_rec.data.preprocess import preprocess_tsmc2014, read_tsmc2014
+from poi_rec.data.preprocess import preprocess_fingerprint, preprocess_tsmc2014, read_tsmc2014
 
 
 def _write_raw(path: Path) -> None:
@@ -35,11 +35,75 @@ class PreprocessDatasetTest(unittest.TestCase):
             self.assertEqual(summary["num_pois"], 4)
             metadata = load_metadata(out)
             arrays = load_processed_arrays(out)
+            self.assertEqual(metadata["schema_version"], 4)
+            self.assertEqual(
+                metadata["preprocess_fingerprint"],
+                preprocess_fingerprint(metadata["preprocess_config"]),
+            )
             self.assertEqual(metadata["num_categories"], 3)
             self.assertEqual(tuple(arrays["transition_features"].shape), (4, 4))
+            self.assertEqual(tuple(arrays["node2vec_embeddings"].shape), (4, 64))
+            self.assertEqual(tuple(arrays["text_embeddings"].shape), (4, 64))
+            self.assertEqual(tuple(arrays["topology_available"].shape), (4,))
+            self.assertEqual(tuple(arrays["user_poi_edges"].shape[1:]), (3,))
+            self.assertGreater(metadata["num_user_poi_edges"], 0)
+            self.assertEqual(metadata["split_protocol"], "user_chronological_ratio")
+            poi_text = (out / "poi_text.json").read_text(encoding="utf-8")
+            self.assertNotIn("Visit count", poi_text)
+            self.assertNotIn("Latitude", poi_text)
+            self.assertNotIn("Category ID", poi_text)
 
             dataset = POISequenceDataset(out, "train", max_seq_len=2)
             item = dataset[0]
             self.assertEqual(item["poi"].shape[0], 2)
             self.assertEqual(item["attention_mask"].shape[0], 2)
             self.assertEqual(item["target"].ndim, 0)
+            self.assertGreaterEqual(int(item["poi"][0]), 1)
+
+    def test_no_transition_overcount(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            raw = tmp_path / "tiny.tsv"
+            out = tmp_path / "processed"
+            _write_raw(raw)
+            preprocess_tsmc2014(raw, out, city="TEST", max_seq_len=3)
+            metadata = load_metadata(out)
+            arrays = load_processed_arrays(out)
+            self.assertEqual(metadata["train_transition_weight_sum"], metadata["train_adjacent_transition_count"])
+            self.assertEqual(float(arrays["transition_edges"][:, 2].sum()), metadata["train_adjacent_transition_count"])
+
+    def test_isolated_poi_has_no_fake_topology(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            raw = tmp_path / "tiny.tsv"
+            out = tmp_path / "processed"
+            _write_raw(raw)
+            preprocess_tsmc2014(raw, out, city="TEST", max_seq_len=3)
+            arrays = load_processed_arrays(out)
+            isolated = arrays["topology_available"].eq(0)
+            if isolated.any():
+                self.assertTrue(arrays["node2vec_embeddings"][isolated].eq(0).all())
+
+    def test_preprocess_fingerprint_changes_with_config(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            raw = tmp_path / "tiny.tsv"
+            out = tmp_path / "processed"
+            _write_raw(raw)
+            preprocess_tsmc2014(raw, out, city="TEST", max_seq_len=2)
+            metadata = load_metadata(out)
+            changed = dict(metadata["preprocess_config"])
+            changed["max_seq_len"] = 3
+            self.assertNotEqual(metadata["preprocess_fingerprint"], preprocess_fingerprint(changed))
+
+    def test_closed_world_target_validity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            raw = tmp_path / "tiny.tsv"
+            out = tmp_path / "processed"
+            _write_raw(raw)
+            preprocess_tsmc2014(raw, out, city="TEST", max_seq_len=2)
+            arrays = load_processed_arrays(out)
+            val_dataset = POISequenceDataset(out, "val", max_seq_len=2, candidate_protocol="closed_world")
+            for item in val_dataset:
+                self.assertEqual(float(arrays["train_seen_poi"][int(item["target"])]), 1.0)

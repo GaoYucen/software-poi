@@ -1,33 +1,98 @@
 city: NYC
 raw_path: data/dataset_TSMC2014_NYC.txt
-processed_dir: processed/debug_nyc
+processed_dir: processed/debug_nyc_v4
 run_dir: runs/debug
 
 max_seq_len: 12
 min_user_checkins: 2
+val_ratio: 0.1
+test_ratio: 0.1
+limit_users: 50
 batch_size: 16
 num_workers: 0
+padding_side: right
+candidate_protocol: closed_world
 
 hidden_dim: 64
 topology_dim: 64
 semantic_dim: 64
 temporal_dim: 64
 user_dim: 64
+topology_encoder: node2vec
+node2vec_dim: 32
+node2vec_walk_length: 6
+node2vec_num_walks: 3
+node2vec_p: 1.0
+node2vec_q: 1.0
+semantic_encoder: tfidf_svd
+text_embedding_dim: 32
+text_model_name: null
+use_user_id_embedding: true
 gpt_model_name: gpt2
 use_pretrained_gpt: false
+fallback_to_random_gpt: true
 freeze_gpt: false
 unfreeze_last_n: 0
+gpt_freeze_policy: random
 gpt_layers: 1
 gpt_heads: 2
 dropout: 0.1
+matching_normalize: true
+initial_logit_scale: 14.285714
+neural_score_weight: 1.0
+collaborative_score_weight: 1.0
+collaborative_dim: 64
+cf_initial_logit_scale: 1.0
+apply_priors_during_training: false
+transition_prior_weight: 24.0
+transition_prior_mode: prob
+history_transition_prior_weight: 0.0
+history_transition_decay: 0.8
+history_transition_aggregation: sum
+user_poi_prior_weight: 12.0
+user_poi_prior_mode: log_count
+co_visit_prior_weight: 0.0
+co_visit_prior_mode: log_count
+co_visit_max_user_pois: 100
+category_transition_prior_weight: 0.0
+category_transition_prior_mode: prob
+user_category_prior_weight: 0.0
+user_category_prior_mode: log_count
+history_repeat_prior_weight: 6.0
+history_repeat_decay: 1.0
+history_repeat_aggregation: sum
+popularity_prior_weight: 0.5
+spatial_prior_weight: 1.0
+spatial_prior_temperature: 0.5
 
 lr: 0.001
 weight_decay: 0.0
 epochs: 1
 align_loss_weight: 0.05
+align_instance_weight: 1.0
+align_feature_weight: 0.25
+alignment_pretrain_epochs: 1
+alignment_pretrain_lr: 0.001
 gradient_clip: 1.0
 device: auto
 seed: 42
+skip_val_during_training: false
+eval_every_epochs: 1
+
+sampled_cf:
+  enabled: false
+  num_candidates: 256
+  include_priors: true
+  hard_history_width: 20
+  hard_user_poi_top: 64
+  hard_transition_top: 64
+  hard_history_transition_top: 16
+  hard_popularity_top: 64
 
 metrics_k: [5, 10, 20]
+monitor_metric: NDCG@10
+monitor_mode: max
 
+curriculum:
+  enabled: false
+  discrepancy_weight: 0.0

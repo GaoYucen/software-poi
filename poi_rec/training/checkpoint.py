@@ -20,6 +20,9 @@ def save_checkpoint(
             "config": config,
             "metadata": metadata,
             "metrics": metrics,
+            "gpt_model_name": getattr(getattr(model, "backbone", None), "gpt_model_name", None),
+            "gpt_init_mode": getattr(getattr(model, "backbone", None), "gpt_init_mode", None),
+            "pretrained_gpt_loaded": getattr(getattr(model, "backbone", None), "pretrained_gpt_loaded", None),
         },
         path,
     )

@@ -7,3 +7,6 @@ from torch.nn import functional as F
 def next_poi_loss(scores: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     return F.cross_entropy(scores, target)
 
+
+def next_poi_loss_per_sample(scores: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    return F.cross_entropy(scores, target, reduction="none")

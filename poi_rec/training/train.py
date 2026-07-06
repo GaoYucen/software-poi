@@ -9,12 +9,12 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 
 from poi_rec.data.dataset import POISequenceDataset, load_metadata, load_processed_arrays
-from poi_rec.data.preprocess import preprocess_tsmc2014
-from poi_rec.losses.alignment_loss import info_nce_alignment_loss
-from poi_rec.losses.recommendation_loss import next_poi_loss
+from poi_rec.data.preprocess import build_preprocess_config, preprocess_fingerprint, preprocess_tsmc2014
+from poi_rec.losses.alignment_loss import combined_alignment_loss
+from poi_rec.losses.recommendation_loss import next_poi_loss_per_sample
 from poi_rec.models.poi_model import POIRecommendationModel
 from poi_rec.training.checkpoint import save_checkpoint
-from poi_rec.training.metrics import average_metric_dicts, ranking_metrics
+from poi_rec.training.metrics import average_metric_dicts, ranking_metric_sums
 from poi_rec.utils.random import resolve_device, set_seed
 
 
@@ -22,16 +22,142 @@ def _move_batch(batch: dict[str, torch.Tensor], device: torch.device) -> dict[st
     return {key: value.to(device) for key, value in batch.items()}
 
 
+def _build_sampled_candidates(
+    batch: dict[str, torch.Tensor],
+    train_seen_ids: torch.Tensor,
+    num_candidates: int,
+    *,
+    transition_top_ids: dict[int, list[int]] | None = None,
+    user_poi_top_ids: dict[int, list[int]] | None = None,
+    popularity_ids: torch.Tensor | None = None,
+    hard_history_width: int = 20,
+    hard_user_poi_top: int = 64,
+    hard_transition_top: int = 64,
+    hard_history_transition_top: int = 16,
+    hard_popularity_top: int = 64,
+) -> torch.Tensor:
+    target = batch["target"]
+    candidate_count = max(2, num_candidates)
+    device = target.device
+    target_cpu = target.detach().cpu().tolist()
+    poi_cpu = batch["poi"].detach().cpu()
+    mask_cpu = batch["attention_mask"].detach().cpu()
+    user_cpu = batch["user_idx"].detach().cpu().tolist()
+    train_seen_cpu = train_seen_ids.detach().cpu()
+    popularity_cpu = popularity_ids.detach().cpu() if popularity_ids is not None else torch.empty(0, dtype=torch.long)
+
+    rows: list[list[int]] = []
+    for row_idx, target_id in enumerate(target_cpu):
+        seen = {int(target_id)}
+        row = [int(target_id)]
+
+        def add_candidate(candidate_id: int) -> None:
+            if len(row) >= candidate_count:
+                return
+            candidate_id = int(candidate_id)
+            if candidate_id in seen:
+                return
+            seen.add(candidate_id)
+            row.append(candidate_id)
+
+        valid_positions = torch.nonzero(mask_cpu[row_idx].gt(0), as_tuple=False).flatten().tolist()
+        history = [int(poi_cpu[row_idx, pos].item()) - 1 for pos in valid_positions]
+        history = [poi for poi in history if poi >= 0]
+        for poi_id in reversed(history[-max(0, hard_history_width) :]):
+            add_candidate(poi_id)
+
+        user_top = (user_poi_top_ids or {}).get(int(user_cpu[row_idx]), [])
+        for poi_id in user_top[: max(0, hard_user_poi_top)]:
+            add_candidate(poi_id)
+
+        if history:
+            last_poi = history[-1]
+            for poi_id in (transition_top_ids or {}).get(last_poi, [])[: max(0, hard_transition_top)]:
+                add_candidate(poi_id)
+            if hard_history_transition_top > 0:
+                for source_poi in reversed(history[:-1]):
+                    for poi_id in (transition_top_ids or {}).get(source_poi, [])[:hard_history_transition_top]:
+                        add_candidate(poi_id)
+                        if len(row) >= candidate_count:
+                            break
+                    if len(row) >= candidate_count:
+                        break
+
+        for poi_id in popularity_cpu[: max(0, hard_popularity_top)].tolist():
+            add_candidate(int(poi_id))
+
+        while len(row) < candidate_count:
+            random_idx = torch.randint(low=0, high=train_seen_cpu.shape[0], size=(1,)).item()
+            add_candidate(int(train_seen_cpu[random_idx].item()))
+        rows.append(row)
+    return torch.tensor(rows, dtype=torch.long, device=device)
+
+
+def _precompute_top_prior_ids(
+    prior: dict[int, tuple[torch.Tensor, torch.Tensor]],
+    topn: int,
+) -> dict[int, list[int]]:
+    if topn <= 0:
+        return {}
+    top_ids: dict[int, list[int]] = {}
+    for key, (ids, values) in prior.items():
+        if ids.numel() == 0:
+            continue
+        order = torch.argsort(values, descending=True)[:topn]
+        top_ids[int(key)] = [int(ids[idx].item()) for idx in order]
+    return top_ids
+
+
 def _ensure_processed(config: dict[str, Any]) -> None:
     processed_dir = Path(config["processed_dir"])
-    if (processed_dir / "metadata.json").exists():
-        return
+    metadata_path = processed_dir / "metadata.json"
+    preprocess_config = build_preprocess_config(
+        raw_path=Path(config["raw_path"]),
+        city=str(config.get("city", "NYC")),
+        max_seq_len=int(config["max_seq_len"]),
+        min_user_checkins=int(config.get("min_user_checkins", 2)),
+        val_ratio=float(config.get("val_ratio", 0.1)),
+        test_ratio=float(config.get("test_ratio", 0.1)),
+        limit_users=config.get("limit_users"),
+        node2vec_dim=int(config.get("node2vec_dim", 64)),
+        node2vec_walk_length=int(config.get("node2vec_walk_length", 10)),
+        node2vec_num_walks=int(config.get("node2vec_num_walks", 5)),
+        node2vec_p=float(config.get("node2vec_p", 1.0)),
+        node2vec_q=float(config.get("node2vec_q", 1.0)),
+        text_encoder=str(config.get("semantic_encoder", config.get("text_encoder", "tfidf_svd"))),
+        text_embedding_dim=int(config.get("text_embedding_dim", 64)),
+        text_model_name=config.get("text_model_name"),
+        seed=int(config.get("seed", 42)),
+    )
+    expected_fingerprint = preprocess_fingerprint(preprocess_config)
+    if metadata_path.exists():
+        with metadata_path.open("r", encoding="utf-8") as f:
+            metadata = json.load(f)
+        if int(metadata.get("schema_version", 0)) >= 4 and metadata.get("preprocess_fingerprint") == expected_fingerprint:
+            return
+        if int(metadata.get("schema_version", 0)) >= 4:
+            raise RuntimeError(
+                f"Processed data in {processed_dir} does not match the current config fingerprint. "
+                "Regenerate it with scripts/preprocess.py --config <config> or use a new processed_dir."
+            )
     preprocess_tsmc2014(
         raw_path=Path(config["raw_path"]),
         out_dir=processed_dir,
         city=str(config.get("city", "NYC")),
         max_seq_len=int(config["max_seq_len"]),
         min_user_checkins=int(config.get("min_user_checkins", 2)),
+        val_ratio=preprocess_config["val_ratio"],
+        test_ratio=preprocess_config["test_ratio"],
+        limit_users=preprocess_config["limit_users"],
+        node2vec_dim=preprocess_config["node2vec_dim"],
+        node2vec_walk_length=preprocess_config["node2vec_walk_length"],
+        node2vec_num_walks=preprocess_config["node2vec_num_walks"],
+        node2vec_p=preprocess_config["node2vec_p"],
+        node2vec_q=preprocess_config["node2vec_q"],
+        text_encoder=preprocess_config["text_encoder"],
+        text_embedding_dim=preprocess_config["text_embedding_dim"],
+        text_model_name=preprocess_config["text_model_name"],
+        seed=preprocess_config["seed"],
     )
 
 
@@ -47,7 +173,7 @@ def evaluate_model(
     for batch in loader:
         batch = _move_batch(batch, device)
         output = model(batch)
-        metric_batches.append(ranking_metrics(output["scores"], batch["target"], metrics_k))
+        metric_batches.append(ranking_metric_sums(output["scores"], batch["target"], metrics_k))
     return average_metric_dicts(metric_batches)
 
 
@@ -62,8 +188,19 @@ def train_from_config(config: dict[str, Any]) -> None:
 
     metadata = load_metadata(processed_dir)
     arrays = load_processed_arrays(processed_dir)
-    train_ds = POISequenceDataset(processed_dir, "train", max_seq_len=int(config["max_seq_len"]))
-    val_ds = POISequenceDataset(processed_dir, "val", max_seq_len=int(config["max_seq_len"]))
+    candidate_protocol = str(config.get("candidate_protocol", "all_poi"))
+    train_ds = POISequenceDataset(
+        processed_dir,
+        "train",
+        max_seq_len=int(config["max_seq_len"]),
+        candidate_protocol=candidate_protocol,
+    )
+    val_ds = POISequenceDataset(
+        processed_dir,
+        "val",
+        max_seq_len=int(config["max_seq_len"]),
+        candidate_protocol=candidate_protocol,
+    )
     if len(train_ds) == 0:
         raise ValueError("No training samples found. Try lowering min_user_checkins or checking the raw data.")
 
@@ -83,15 +220,76 @@ def train_from_config(config: dict[str, Any]) -> None:
     device = resolve_device(str(config.get("device", "auto")))
     arrays = {key: value.to(device) for key, value in arrays.items()}
     model = POIRecommendationModel(metadata, arrays, config).to(device)
+    alignment_checkpoint = config.get("alignment_checkpoint")
+    if alignment_checkpoint is None:
+        candidate = run_dir / "alignment_pretrain.pt"
+        alignment_checkpoint = str(candidate) if candidate.exists() else None
+    if alignment_checkpoint:
+        state = torch.load(alignment_checkpoint, map_location=device, weights_only=True)
+        expected_fingerprint = metadata.get("preprocess_fingerprint")
+        if state.get("preprocess_fingerprint") != expected_fingerprint:
+            raise RuntimeError(
+                "Alignment checkpoint preprocess fingerprint does not match current processed data."
+            )
+        for key in ("num_pois", "num_categories", "node2vec_dim", "text_embedding_dim"):
+            if state.get(key) != metadata.get(key):
+                raise RuntimeError(f"Alignment checkpoint {key}={state.get(key)} does not match metadata {metadata.get(key)}")
+        buffer_keys = [
+            key
+            for key in state["alignment_state"]
+            if key.endswith(("transition_features", "node2vec_embeddings", "poi_category", "poi_coords", "text_embeddings", "user_poi_edges"))
+            or ".transition_features" in key
+            or ".node2vec_embeddings" in key
+            or ".poi_category" in key
+            or ".poi_coords" in key
+            or ".text_embeddings" in key
+            or ".user_poi_edges" in key
+        ]
+        if buffer_keys:
+            raise RuntimeError(f"Alignment checkpoint contains data buffers: {buffer_keys}")
+        missing, unexpected = model.load_state_dict(state["alignment_state"], strict=False)
+        unexpected_relevant = [
+            key for key in unexpected if key.startswith(("topology.", "semantic.", "alignment."))
+        ]
+        if unexpected_relevant:
+            raise RuntimeError(f"Unexpected alignment checkpoint keys: {unexpected_relevant}")
+        print(f"loaded alignment checkpoint: {alignment_checkpoint}; missing non-alignment keys: {len(missing)}")
     optimizer = torch.optim.AdamW(
         [param for param in model.parameters() if param.requires_grad],
         lr=float(config["lr"]),
         weight_decay=float(config.get("weight_decay", 0.0)),
     )
     align_weight = float(config.get("align_loss_weight", 0.0))
+    align_instance_weight = float(config.get("align_instance_weight", 1.0))
+    align_feature_weight = float(config.get("align_feature_weight", 0.25))
+    discrepancy_weight = float(config.get("curriculum", {}).get("discrepancy_weight", 0.0))
+    curriculum_enabled = bool(config.get("curriculum", {}).get("enabled", False))
+    train_with_priors = bool(config.get("apply_priors_during_training", False))
+    sampled_cf = dict(config.get("sampled_cf", {}))
+    sampled_cf_enabled = bool(sampled_cf.get("enabled", False))
+    sampled_cf_candidates = int(sampled_cf.get("num_candidates", 256))
+    train_seen_ids = torch.nonzero(arrays["train_seen_poi"].gt(0), as_tuple=False).flatten()
+    if sampled_cf_enabled and train_seen_ids.numel() == 0:
+        raise ValueError("sampled_cf requires at least one train-seen POI candidate.")
+    popularity_ids = torch.argsort(arrays["train_visit_count"], descending=True)
+    popularity_ids = popularity_ids[arrays["train_seen_poi"][popularity_ids].gt(0)]
+    sampled_cf_include_priors = bool(sampled_cf.get("include_priors", True))
+    sampled_hard_user_poi_top = int(sampled_cf.get("hard_user_poi_top", 64))
+    sampled_hard_transition_top = int(sampled_cf.get("hard_transition_top", 64))
+    sampled_hard_history_transition_top = int(sampled_cf.get("hard_history_transition_top", 16))
+    transition_top_ids = _precompute_top_prior_ids(
+        model.transition_prior,
+        max(sampled_hard_transition_top, sampled_hard_history_transition_top),
+    )
+    user_poi_top_ids = _precompute_top_prior_ids(model.user_poi_prior, sampled_hard_user_poi_top)
     metrics_k = [int(k) for k in config.get("metrics_k", [5, 10, 20])]
     best_recall = float("-inf")
     best_metrics: dict[str, float] = {}
+    monitor_key = str(config.get("monitor_metric", f"HR@{metrics_k[0]}"))
+    monitor_mode = str(config.get("monitor_mode", "max"))
+    best_score = float("-inf") if monitor_mode == "max" else float("inf")
+    skip_val_during_training = bool(config.get("skip_val_during_training", False))
+    eval_every_epochs = max(1, int(config.get("eval_every_epochs", 1)))
 
     for epoch in range(1, int(config["epochs"]) + 1):
         model.train()
@@ -102,13 +300,63 @@ def train_from_config(config: dict[str, Any]) -> None:
         for batch in pbar:
             batch = _move_batch(batch, device)
             optimizer.zero_grad(set_to_none=True)
-            output = model(batch)
-            rec_loss = next_poi_loss(output["scores"], batch["target"])
-            align_loss = info_nce_alignment_loss(
-                output["aligned_topology"],
-                output["aligned_semantic"],
-                batch["attention_mask"],
-            )
+            if sampled_cf_enabled:
+                candidate_ids = _build_sampled_candidates(
+                    batch,
+                    train_seen_ids,
+                    sampled_cf_candidates,
+                    transition_top_ids=transition_top_ids,
+                    user_poi_top_ids=user_poi_top_ids,
+                    popularity_ids=popularity_ids,
+                    hard_history_width=int(sampled_cf.get("hard_history_width", 20)),
+                    hard_user_poi_top=sampled_hard_user_poi_top,
+                    hard_transition_top=sampled_hard_transition_top,
+                    hard_history_transition_top=sampled_hard_history_transition_top,
+                    hard_popularity_top=int(sampled_cf.get("hard_popularity_top", 64)),
+                )
+                sampled_scores = model.collaborative_scores_for_candidates(batch, candidate_ids)
+                if sampled_cf_include_priors:
+                    sampled_scores = sampled_scores + model.prior_scores_for_candidates(batch, candidate_ids)
+                rec_loss_items = next_poi_loss_per_sample(
+                    sampled_scores,
+                    torch.zeros(batch["target"].shape[0], dtype=torch.long, device=device),
+                )
+                output = {
+                    "scores": sampled_scores,
+                    "aligned_topology": torch.empty(0, device=device),
+                    "aligned_semantic": torch.empty(0, device=device),
+                    "discrepancy": torch.zeros_like(batch["attention_mask"], dtype=torch.float32),
+                }
+            else:
+                output = model(batch, include_priors=train_with_priors, need_alignment_outputs=align_weight > 0)
+                rec_loss_items = next_poi_loss_per_sample(output["scores"], batch["target"])
+            modal_difficulty = (
+                (output["discrepancy"] * batch["attention_mask"]).sum(dim=1)
+                / batch["attention_mask"].sum(dim=1).clamp(min=1)
+            ).detach()
+            if curriculum_enabled:
+                progress = epoch / max(1, int(config["epochs"]))
+                threshold = torch.quantile(modal_difficulty, min(1.0, 0.35 + 0.65 * progress))
+                keep = modal_difficulty.le(threshold)
+                if keep.any():
+                    rec_loss_items = rec_loss_items[keep]
+                    modal_difficulty = modal_difficulty[keep]
+            if discrepancy_weight > 0:
+                weights = 1.0 + discrepancy_weight * modal_difficulty
+                rec_loss = (rec_loss_items * weights).mean()
+            else:
+                rec_loss = rec_loss_items.mean()
+            if align_weight > 0:
+                align_loss = combined_alignment_loss(
+                    output["aligned_topology"],
+                    output["aligned_semantic"],
+                    batch["attention_mask"],
+                    batch["poi"],
+                    instance_weight=align_instance_weight,
+                    feature_weight=align_feature_weight,
+                )
+            else:
+                align_loss = output["scores"].new_tensor(0.0)
             loss = rec_loss + align_weight * align_loss
             loss.backward()
             if float(config.get("gradient_clip", 0.0)) > 0:
@@ -124,16 +372,23 @@ def train_from_config(config: dict[str, Any]) -> None:
             "next_loss": total_next / len(train_loader),
             "align_loss": total_align / len(train_loader),
         }
-        val_metrics = evaluate_model(model, val_loader, device, metrics_k) if len(val_ds) else {}
+        should_eval = (
+            len(val_ds) > 0
+            and not skip_val_during_training
+            and (epoch % eval_every_epochs == 0 or epoch == int(config["epochs"]))
+        )
+        val_metrics = evaluate_model(model, val_loader, device, metrics_k) if should_eval else {}
         print(f"epoch {epoch}: train={train_summary} val={val_metrics}")
-        monitor_key = f"Recall@{metrics_k[0]}"
         monitor = val_metrics.get(monitor_key, -train_summary["loss"])
-        if monitor > best_recall:
+        improved = monitor > best_score if monitor_mode == "max" else monitor < best_score
+        if improved:
+            best_score = monitor
             best_recall = monitor
             best_metrics = val_metrics
             save_checkpoint(run_dir / "best.pt", model, config, metadata, val_metrics)
 
-    if not (run_dir / "best.pt").exists():
+    if skip_val_during_training:
+        save_checkpoint(run_dir / "best.pt", model, config, metadata, best_metrics)
+    elif not (run_dir / "best.pt").exists():
         save_checkpoint(run_dir / "best.pt", model, config, metadata, best_metrics)
     print(f"best checkpoint: {run_dir / 'best.pt'}")
-

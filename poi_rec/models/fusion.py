@@ -15,7 +15,7 @@ class DynamicFusion(nn.Module):
             nn.Sigmoid(),
         )
         self.output = nn.Sequential(
-            nn.Linear(hidden_dim * 3, hidden_dim),
+            nn.Linear(hidden_dim * 4, hidden_dim),
             nn.GELU(),
             nn.LayerNorm(hidden_dim),
         )
@@ -24,10 +24,10 @@ class DynamicFusion(nn.Module):
         self,
         topology: torch.Tensor,
         semantic: torch.Tensor,
+        spatial: torch.Tensor,
         temporal: torch.Tensor,
         user: torch.Tensor,
     ) -> torch.Tensor:
         gate = self.gate(torch.cat([topology, semantic, temporal, user], dim=-1))
         static = gate * topology + (1.0 - gate) * semantic
-        return self.output(torch.cat([static, temporal, user], dim=-1))
-
+        return self.output(torch.cat([static, spatial, temporal, user], dim=-1))
