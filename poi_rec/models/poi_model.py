@@ -6,7 +6,7 @@ import torch
 from torch import nn
 
 from poi_rec.models.alignment import AlignmentModule
-from poi_rec.models.encoders import SemanticEncoder, SpatialEncoder, TemporalEncoder, TopologyEncoder
+from poi_rec.models.encoders import ProfileEncoder, SemanticEncoder, SpatialEncoder, TemporalEncoder, TopologyEncoder
 from poi_rec.models.fusion import DynamicFusion
 from poi_rec.models.gpt_backbone import GPTBackbone, last_valid_state
 
@@ -110,6 +110,7 @@ class POIRecommendationModel(nn.Module):
         )
         self.use_user_id_embedding = bool(config.get("use_user_id_embedding", True))
         self.user_embedding = nn.Embedding(self.num_users, hidden_dim) if self.use_user_id_embedding else None
+        self.profile_encoder = ProfileEncoder(self.user_category_prior_matrix, hidden_dim)
         self.alignment = AlignmentModule(hidden_dim)
         self.fusion = DynamicFusion(hidden_dim, float(config.get("dropout", 0.1)))
         self.backbone = GPTBackbone(
@@ -398,11 +399,12 @@ class POIRecommendationModel(nn.Module):
         spatial = self.spatial(poi)
         aligned_topology, aligned_semantic = self.alignment(topology, semantic)
         temporal = self.temporal(batch["hour"], batch["weekday"], batch["delta_bucket"])
+        profile = self.profile_encoder(batch["user_idx"], poi.shape[1])
         if self.user_embedding is None:
             user = torch.zeros_like(temporal)
         else:
             user = self.user_embedding(batch["user_idx"]).unsqueeze(1).expand_as(temporal)
-        tokens = self.fusion(aligned_topology, aligned_semantic, spatial, temporal, user)
+        tokens = self.fusion(aligned_topology, aligned_semantic, spatial, temporal, user, profile)
         hidden = self.backbone(tokens, batch["attention_mask"])
         query = last_valid_state(hidden, batch["attention_mask"])
         discrepancy = self.alignment.discrepancy(aligned_topology, aligned_semantic)

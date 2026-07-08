@@ -88,6 +88,21 @@ class TemporalEncoder(nn.Module):
         )
 
 
+class ProfileEncoder(nn.Module):
+    def __init__(self, user_category_prior_matrix: torch.Tensor, hidden_dim: int) -> None:
+        super().__init__()
+        self.register_buffer("user_category_prior_matrix", user_category_prior_matrix.float())
+        self.profile_projection = nn.Sequential(
+            nn.Linear(user_category_prior_matrix.shape[1], hidden_dim),
+            nn.GELU(),
+            nn.LayerNorm(hidden_dim),
+        )
+
+    def forward(self, user_idx: torch.Tensor, seq_len: int) -> torch.Tensor:
+        profile = self.profile_projection(self.user_category_prior_matrix[user_idx])
+        return profile.unsqueeze(1).expand(-1, seq_len, -1)
+
+
 class SpatialEncoder(nn.Module):
     def __init__(self, poi_coords: torch.Tensor, hidden_dim: int) -> None:
         super().__init__()

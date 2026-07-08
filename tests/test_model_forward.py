@@ -59,6 +59,7 @@ class ModelForwardTest(unittest.TestCase):
             self.assertEqual(model._collaborative_scores(batch).shape, torch.Size([1, 3]))
             self.assertEqual(output["aligned_topology"].shape[-1], 32)
             self.assertEqual(model.candidate_embeddings().shape, torch.Size([3, 32]))
+            self.assertEqual(model.profile_encoder(batch["user_idx"], seq_len=3).shape, torch.Size([1, 3, 32]))
             self.assertFalse(hasattr(model.topology, "poi_embedding"))
             no_prior_scores = model(batch, include_priors=False)["scores"]
             model.configure_priors(user_poi_prior_weight=2.0, user_poi_prior_mode="binary")

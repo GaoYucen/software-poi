@@ -17,3 +17,20 @@ venv/
 .vscode/
 
 previous/
+
+# LaTeX generated files
+latex/*.aux
+latex/*.bbl
+latex/*.bcf
+latex/*.blg
+latex/*.fdb_latexmk
+latex/*.fls
+latex/*.log
+latex/*.run.xml
+latex/*.xdv
+latex/*.synctex.gz
+
+# Local debug / efficiency experiment artifacts
+processed/debug*/
+runs/debug*/
+runs/*_local/

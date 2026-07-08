@@ -1,5 +1,5 @@
 """Generate real experiment figures from trained model checkpoint.
-Run on the server where checkpoint and data exist."""
+Run on the local machine where checkpoint and data exist."""
 import sys
 import os
 import json
@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 
 # Setup path
-sys.path.insert(0, '/root/poi')
+sys.path.insert(0, '/Users/gaoyucen/poi')
 
 from poi_rec.data.dataset import POISequenceDataset, load_metadata, load_processed_arrays
 from poi_rec.models.poi_model import POIRecommendationModel
@@ -23,7 +23,7 @@ def get_model_and_data(config_path, checkpoint_path):
     with open(config_path) as f:
         config = json.load(f)
     
-    processed_dir = '/root/poi/processed/NYC'
+    processed_dir = '/Users/gaoyucen/poi/processed/NYC'
     metadata = load_metadata(processed_dir)
     arrays = load_processed_arrays(processed_dir)
     
@@ -31,7 +31,7 @@ def get_model_and_data(config_path, checkpoint_path):
     model = POIRecommendationModel(metadata, arrays, config)
     
     print(f"Loading checkpoint from {checkpoint_path}")
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
     model.load_state_dict(checkpoint['model_state'], strict=False)
     model.eval()
     
@@ -41,7 +41,7 @@ def get_model_and_data(config_path, checkpoint_path):
         max_seq_len=config.get('max_seq_len', 20),
         candidate_protocol=config.get('candidate_protocol', 'all_poi')
     )
-    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=2)
+    test_loader = DataLoader(test_dataset, batch_size=64, shuffle=False, num_workers=0)
     
     return config, model, test_loader
 
@@ -53,11 +53,12 @@ def collect_gate_values(model, test_loader, device):
     
     gate_values = []
     
-    def hook_fn(module, gate_input, gate_output):
-        # gate_input = concatenated [topology, semantic, temporal, user]
-        # gate_output = sigmoid(gate_input)
-        gate_values.append(gate_output.detach().cpu())
+    def hook_fn(module, input, output):
+        # gate module: nn.Sequential ending with Sigmoid
+        # output = sigmoid(linear(...))
+        gate_values.append(output.detach().cpu())
     
+    # The gate is a nn.Sequential; we register hook on the full Sequential
     handle = model.fusion.gate.register_forward_hook(hook_fn)
     
     n_batches = 0
@@ -186,9 +187,9 @@ def plot_tsne(topo_before, sem_before, topo_after, sem_after, save_path):
     print(f"t-SNE saved to {save_path}")
 
 def main():
-    config_path = '/root/poi/runs/nyc_mvp/config.json'
-    checkpoint_path = '/root/poi/runs/nyc_mvp/best.pt'
-    output_dir = '/root/poi/latex/figure/'
+    config_path = '/Users/gaoyucen/poi/runs/nyc_mvp/config.json'
+    checkpoint_path = '/Users/gaoyucen/poi/runs/nyc_mvp/best.pt'
+    output_dir = '/Users/gaoyucen/poi/latex/figure/'
     
     os.makedirs(output_dir, exist_ok=True)
     
@@ -199,6 +200,25 @@ def main():
     print("\n=== Collecting gate values ===")
     gate_values = collect_gate_values(model, test_loader, device)
     if gate_values is not None:
+        # Print detailed statistics
+        g = gate_values.flatten()
+        print(f"\n=== Detailed Gate Statistics ===")
+        print(f"Overall mean: {g.mean():.4f}")
+        print(f"Overall std: {g.std():.4f}")
+        print(f"Overall var: {g.var():.4f}")
+        n_positions = min(10, gate_values.shape[1])
+        for p in range(n_positions):
+            pm = gate_values[:, p, :].mean()
+            ps = gate_values[:, p, :].std()
+            print(f"  Position {p+1}: mean={pm:.4f}, std={ps:.4f}")
+        # Position group statistics
+        pos_groups = {'Front (1-3)': (0, 3), 'Middle (4-6)': (3, 6), 'Rear (7-10)': (6, 10)}
+        for name, (start, end) in pos_groups.items():
+            if start < n_positions:
+                end_actual = min(end, n_positions)
+                group_data = gate_values[:, start:end_actual, :].flatten()
+                print(f"  {name}: mean={group_data.mean():.4f}, std={group_data.std():.4f}")
+        
         plot_gate_distribution(gate_values, os.path.join(output_dir, 'gate_distribution.png'))
     
     print("\n=== Collecting embeddings for t-SNE ===")

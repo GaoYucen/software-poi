@@ -1,0 +1,75 @@
+city: NYC
+raw_path: data/dataset_TSMC2014_NYC.txt
+processed_dir: processed/NYC
+run_dir: runs/nyc_profile_llm
+
+max_seq_len: 20
+min_user_checkins: 2
+val_ratio: 0.1
+test_ratio: 0.1
+batch_size: 64
+num_workers: 0
+candidate_protocol: closed_world
+
+# --- Model Dimensions ---
+hidden_dim: 128
+node2vec_dim: 128
+node2vec_walk_length: 20
+node2vec_num_walks: 10
+node2vec_p: 1.0
+node2vec_q: 1.0
+
+# --- Semantic Encoder ---
+semantic_encoder: hf_transformer
+text_embedding_dim: 384
+text_model_name: sentence-transformers/all-MiniLM-L6-v2
+
+use_user_id_embedding: true
+
+# --- GPT Backbone ---
+gpt_model_name: gpt2
+use_pretrained_gpt: true
+fallback_to_random_gpt: false
+gpt_freeze_policy: pathllm_selective
+gpt_layers: 2
+gpt_heads: 4
+dropout: 0.1
+
+# --- Matching ---
+matching_normalize: true
+initial_logit_scale: 14.285714
+
+# --- Neural / auxiliary scores ---
+neural_score_weight: 1.0
+collaborative_score_weight: 0.0
+
+# --- Keep training objective focused on multimodal LLM main branch ---
+transition_prior_weight: 0.0
+history_transition_prior_weight: 0.0
+user_poi_prior_weight: 0.0
+co_visit_prior_weight: 0.0
+category_transition_prior_weight: 0.0
+user_category_prior_weight: 0.0
+history_repeat_prior_weight: 0.0
+popularity_prior_weight: 0.0
+spatial_prior_weight: 0.0
+apply_priors_during_training: false
+
+# --- Training ---
+lr: 0.0005
+weight_decay: 0.01
+epochs: 5
+align_loss_weight: 0.05
+align_instance_weight: 1.0
+align_feature_weight: 0.25
+alignment_pretrain_epochs: 1
+alignment_pretrain_lr: 0.0005
+gradient_clip: 1.0
+device: auto
+seed: 42
+skip_val_during_training: false
+eval_every_epochs: 1
+
+metrics_k: [5, 10, 20]
+monitor_metric: "NDCG@10"
+monitor_mode: max
