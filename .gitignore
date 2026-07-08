@@ -36,3 +36,11 @@ latex/*.synctex.gz
 processed/debug*/
 runs/debug*/
 runs/*_local/
+
+# Python packaging/build metadata
+*.egg-info/
+
+# Local large experiment outputs. Keep reproducible baseline artifacts already
+# tracked under runs/nyc_mvp/, but avoid accidentally adding ad-hoc checkpoints.
+runs/nyc_4090*/
+runs/*benchmark*/

@@ -18,6 +18,39 @@ from poi_rec.training.metrics import average_metric_dicts, ranking_metric_sums
 from poi_rec.utils.random import resolve_device, set_seed
 
 
+def _configure_torch_runtime(config: dict[str, Any], device: torch.device) -> None:
+    if device.type != "cuda":
+        return
+    allow_tf32 = bool(config.get("allow_tf32", True))
+    torch.backends.cuda.matmul.allow_tf32 = allow_tf32
+    torch.backends.cudnn.allow_tf32 = allow_tf32
+    torch.backends.cudnn.benchmark = bool(config.get("cudnn_benchmark", True))
+    matmul_precision = config.get("float32_matmul_precision")
+    if matmul_precision is not None:
+        torch.set_float32_matmul_precision(str(matmul_precision))
+
+
+def _amp_dtype(config: dict[str, Any]) -> torch.dtype:
+    name = str(config.get("amp_dtype", "bf16")).lower()
+    if name in {"bf16", "bfloat16"}:
+        return torch.bfloat16
+    if name in {"fp16", "float16", "half"}:
+        return torch.float16
+    raise ValueError("amp_dtype must be one of: bf16, bfloat16, fp16, float16, half")
+
+
+def _dataloader_kwargs(config: dict[str, Any], device: torch.device) -> dict[str, Any]:
+    num_workers = int(config.get("num_workers", 0))
+    kwargs: dict[str, Any] = {
+        "num_workers": num_workers,
+        "pin_memory": bool(config.get("pin_memory", device.type == "cuda")),
+    }
+    if num_workers > 0:
+        kwargs["persistent_workers"] = bool(config.get("persistent_workers", True))
+        kwargs["prefetch_factor"] = int(config.get("prefetch_factor", 2))
+    return kwargs
+
+
 def _move_batch(batch: dict[str, torch.Tensor], device: torch.device) -> dict[str, torch.Tensor]:
     return {key: value.to(device) for key, value in batch.items()}
 
@@ -204,20 +237,22 @@ def train_from_config(config: dict[str, Any]) -> None:
     if len(train_ds) == 0:
         raise ValueError("No training samples found. Try lowering min_user_checkins or checking the raw data.")
 
+    device = resolve_device(str(config.get("device", "auto")))
+    _configure_torch_runtime(config, device)
+    loader_kwargs = _dataloader_kwargs(config, device)
     train_loader = DataLoader(
         train_ds,
         batch_size=int(config["batch_size"]),
         shuffle=True,
-        num_workers=int(config.get("num_workers", 0)),
+        **loader_kwargs,
     )
     val_loader = DataLoader(
         val_ds,
         batch_size=int(config["batch_size"]),
         shuffle=False,
-        num_workers=int(config.get("num_workers", 0)),
+        **loader_kwargs,
     )
 
-    device = resolve_device(str(config.get("device", "auto")))
     arrays = {key: value.to(device) for key, value in arrays.items()}
     model = POIRecommendationModel(metadata, arrays, config).to(device)
     alignment_checkpoint = config.get("alignment_checkpoint")
@@ -290,6 +325,9 @@ def train_from_config(config: dict[str, Any]) -> None:
     best_score = float("-inf") if monitor_mode == "max" else float("inf")
     skip_val_during_training = bool(config.get("skip_val_during_training", False))
     eval_every_epochs = max(1, int(config.get("eval_every_epochs", 1)))
+    amp_enabled = bool(config.get("amp", False)) and device.type == "cuda"
+    amp_dtype = _amp_dtype(config)
+    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled and amp_dtype == torch.float16)
 
     for epoch in range(1, int(config["epochs"]) + 1):
         model.train()
@@ -300,68 +338,71 @@ def train_from_config(config: dict[str, Any]) -> None:
         for batch in pbar:
             batch = _move_batch(batch, device)
             optimizer.zero_grad(set_to_none=True)
-            if sampled_cf_enabled:
-                candidate_ids = _build_sampled_candidates(
-                    batch,
-                    train_seen_ids,
-                    sampled_cf_candidates,
-                    transition_top_ids=transition_top_ids,
-                    user_poi_top_ids=user_poi_top_ids,
-                    popularity_ids=popularity_ids,
-                    hard_history_width=int(sampled_cf.get("hard_history_width", 20)),
-                    hard_user_poi_top=sampled_hard_user_poi_top,
-                    hard_transition_top=sampled_hard_transition_top,
-                    hard_history_transition_top=sampled_hard_history_transition_top,
-                    hard_popularity_top=int(sampled_cf.get("hard_popularity_top", 64)),
-                )
-                sampled_scores = model.collaborative_scores_for_candidates(batch, candidate_ids)
-                if sampled_cf_include_priors:
-                    sampled_scores = sampled_scores + model.prior_scores_for_candidates(batch, candidate_ids)
-                rec_loss_items = next_poi_loss_per_sample(
-                    sampled_scores,
-                    torch.zeros(batch["target"].shape[0], dtype=torch.long, device=device),
-                )
-                output = {
-                    "scores": sampled_scores,
-                    "aligned_topology": torch.empty(0, device=device),
-                    "aligned_semantic": torch.empty(0, device=device),
-                    "discrepancy": torch.zeros_like(batch["attention_mask"], dtype=torch.float32),
-                }
-            else:
-                output = model(batch, include_priors=train_with_priors, need_alignment_outputs=align_weight > 0)
-                rec_loss_items = next_poi_loss_per_sample(output["scores"], batch["target"])
-            modal_difficulty = (
-                (output["discrepancy"] * batch["attention_mask"]).sum(dim=1)
-                / batch["attention_mask"].sum(dim=1).clamp(min=1)
-            ).detach()
-            if curriculum_enabled:
-                progress = epoch / max(1, int(config["epochs"]))
-                threshold = torch.quantile(modal_difficulty, min(1.0, 0.35 + 0.65 * progress))
-                keep = modal_difficulty.le(threshold)
-                if keep.any():
-                    rec_loss_items = rec_loss_items[keep]
-                    modal_difficulty = modal_difficulty[keep]
-            if discrepancy_weight > 0:
-                weights = 1.0 + discrepancy_weight * modal_difficulty
-                rec_loss = (rec_loss_items * weights).mean()
-            else:
-                rec_loss = rec_loss_items.mean()
-            if align_weight > 0:
-                align_loss = combined_alignment_loss(
-                    output["aligned_topology"],
-                    output["aligned_semantic"],
-                    batch["attention_mask"],
-                    batch["poi"],
-                    instance_weight=align_instance_weight,
-                    feature_weight=align_feature_weight,
-                )
-            else:
-                align_loss = output["scores"].new_tensor(0.0)
-            loss = rec_loss + align_weight * align_loss
-            loss.backward()
+            with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=amp_enabled):
+                if sampled_cf_enabled:
+                    candidate_ids = _build_sampled_candidates(
+                        batch,
+                        train_seen_ids,
+                        sampled_cf_candidates,
+                        transition_top_ids=transition_top_ids,
+                        user_poi_top_ids=user_poi_top_ids,
+                        popularity_ids=popularity_ids,
+                        hard_history_width=int(sampled_cf.get("hard_history_width", 20)),
+                        hard_user_poi_top=sampled_hard_user_poi_top,
+                        hard_transition_top=sampled_hard_transition_top,
+                        hard_history_transition_top=sampled_hard_history_transition_top,
+                        hard_popularity_top=int(sampled_cf.get("hard_popularity_top", 64)),
+                    )
+                    sampled_scores = model.collaborative_scores_for_candidates(batch, candidate_ids)
+                    if sampled_cf_include_priors:
+                        sampled_scores = sampled_scores + model.prior_scores_for_candidates(batch, candidate_ids)
+                    rec_loss_items = next_poi_loss_per_sample(
+                        sampled_scores,
+                        torch.zeros(batch["target"].shape[0], dtype=torch.long, device=device),
+                    )
+                    output = {
+                        "scores": sampled_scores,
+                        "aligned_topology": torch.empty(0, device=device),
+                        "aligned_semantic": torch.empty(0, device=device),
+                        "discrepancy": torch.zeros_like(batch["attention_mask"], dtype=torch.float32),
+                    }
+                else:
+                    output = model(batch, include_priors=train_with_priors, need_alignment_outputs=align_weight > 0)
+                    rec_loss_items = next_poi_loss_per_sample(output["scores"], batch["target"])
+                modal_difficulty = (
+                    (output["discrepancy"] * batch["attention_mask"]).sum(dim=1)
+                    / batch["attention_mask"].sum(dim=1).clamp(min=1)
+                ).detach()
+                if curriculum_enabled:
+                    progress = epoch / max(1, int(config["epochs"]))
+                    threshold = torch.quantile(modal_difficulty, min(1.0, 0.35 + 0.65 * progress))
+                    keep = modal_difficulty.le(threshold)
+                    if keep.any():
+                        rec_loss_items = rec_loss_items[keep]
+                        modal_difficulty = modal_difficulty[keep]
+                if discrepancy_weight > 0:
+                    weights = 1.0 + discrepancy_weight * modal_difficulty
+                    rec_loss = (rec_loss_items * weights).mean()
+                else:
+                    rec_loss = rec_loss_items.mean()
+                if align_weight > 0:
+                    align_loss = combined_alignment_loss(
+                        output["aligned_topology"],
+                        output["aligned_semantic"],
+                        batch["attention_mask"],
+                        batch["poi"],
+                        instance_weight=align_instance_weight,
+                        feature_weight=align_feature_weight,
+                    )
+                else:
+                    align_loss = output["scores"].new_tensor(0.0)
+                loss = rec_loss + align_weight * align_loss
+            scaler.scale(loss).backward()
             if float(config.get("gradient_clip", 0.0)) > 0:
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), float(config["gradient_clip"]))
-            optimizer.step()
+            scaler.step(optimizer)
+            scaler.update()
             total_loss += loss.item()
             total_next += rec_loss.item()
             total_align += align_loss.item()
