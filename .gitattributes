@@ -5,3 +5,5 @@ processed/NYC/train.json filter=lfs diff=lfs merge=lfs -text
 processed/NYC/val.json filter=lfs diff=lfs merge=lfs -text
 processed/NYC/test.json filter=lfs diff=lfs merge=lfs -text
 runs/nyc_mvp/config.json filter=lfs diff=lfs merge=lfs -text
+data/dataset_TSMC2014_NYC.txt filter=lfs diff=lfs merge=lfs -text
+data/dataset_TSMC2014_TKY.txt filter=lfs diff=lfs merge=lfs -text
