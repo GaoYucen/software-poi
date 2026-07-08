@@ -6,7 +6,6 @@ from typing import Any
 
 import torch
 from torch.utils.data import DataLoader
-from tqdm.auto import tqdm
 
 from poi_rec.data.dataset import POISequenceDataset, load_metadata, load_processed_arrays
 from poi_rec.data.preprocess import build_preprocess_config, preprocess_fingerprint, preprocess_tsmc2014
@@ -14,6 +13,7 @@ from poi_rec.losses.alignment_loss import combined_alignment_loss
 from poi_rec.losses.recommendation_loss import next_poi_loss_per_sample
 from poi_rec.models.poi_model import POIRecommendationModel
 from poi_rec.training.checkpoint import save_checkpoint
+from poi_rec.training.logging_utils import setup_run_logger
 from poi_rec.training.metrics import average_metric_dicts, ranking_metric_sums
 from poi_rec.utils.random import resolve_device, set_seed
 
@@ -216,8 +216,14 @@ def train_from_config(config: dict[str, Any]) -> None:
     processed_dir = Path(config["processed_dir"])
     run_dir = Path(config["run_dir"])
     run_dir.mkdir(parents=True, exist_ok=True)
+    logger = setup_run_logger(
+        "poi_rec.train",
+        Path(config.get("train_log_path", run_dir / "train.log")),
+        log_to_console=bool(config.get("log_to_console", True)),
+    )
     with (run_dir / "config.json").open("w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
+    logger.info("training started; run_dir=%s", run_dir)
 
     metadata = load_metadata(processed_dir)
     arrays = load_processed_arrays(processed_dir)
@@ -288,7 +294,11 @@ def train_from_config(config: dict[str, Any]) -> None:
         ]
         if unexpected_relevant:
             raise RuntimeError(f"Unexpected alignment checkpoint keys: {unexpected_relevant}")
-        print(f"loaded alignment checkpoint: {alignment_checkpoint}; missing non-alignment keys: {len(missing)}")
+        logger.info(
+            "loaded alignment checkpoint: %s; missing non-alignment keys: %d",
+            alignment_checkpoint,
+            len(missing),
+        )
     optimizer = torch.optim.AdamW(
         [param for param in model.parameters() if param.requires_grad],
         lr=float(config["lr"]),
@@ -334,8 +344,7 @@ def train_from_config(config: dict[str, Any]) -> None:
         total_loss = 0.0
         total_next = 0.0
         total_align = 0.0
-        pbar = tqdm(train_loader, desc=f"epoch {epoch}", leave=False)
-        for batch in pbar:
+        for batch in train_loader:
             batch = _move_batch(batch, device)
             optimizer.zero_grad(set_to_none=True)
             with torch.autocast(device_type="cuda", dtype=amp_dtype, enabled=amp_enabled):
@@ -406,7 +415,6 @@ def train_from_config(config: dict[str, Any]) -> None:
             total_loss += loss.item()
             total_next += rec_loss.item()
             total_align += align_loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.4f}")
 
         train_summary = {
             "loss": total_loss / len(train_loader),
@@ -419,7 +427,6 @@ def train_from_config(config: dict[str, Any]) -> None:
             and (epoch % eval_every_epochs == 0 or epoch == int(config["epochs"]))
         )
         val_metrics = evaluate_model(model, val_loader, device, metrics_k) if should_eval else {}
-        print(f"epoch {epoch}: train={train_summary} val={val_metrics}")
         monitor = val_metrics.get(monitor_key, -train_summary["loss"])
         improved = monitor > best_score if monitor_mode == "max" else monitor < best_score
         if improved:
@@ -427,9 +434,19 @@ def train_from_config(config: dict[str, Any]) -> None:
             best_recall = monitor
             best_metrics = val_metrics
             save_checkpoint(run_dir / "best.pt", model, config, metadata, val_metrics)
+        logger.info(
+            "epoch %d/%d result: train=%s val=%s monitor=%s %.6f improved=%s",
+            epoch,
+            int(config["epochs"]),
+            train_summary,
+            val_metrics,
+            monitor_key,
+            float(monitor),
+            improved,
+        )
 
     if skip_val_during_training:
         save_checkpoint(run_dir / "best.pt", model, config, metadata, best_metrics)
     elif not (run_dir / "best.pt").exists():
         save_checkpoint(run_dir / "best.pt", model, config, metadata, best_metrics)
-    print(f"best checkpoint: {run_dir / 'best.pt'}")
+    logger.info("best checkpoint: %s", run_dir / "best.pt")

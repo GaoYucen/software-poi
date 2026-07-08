@@ -5,11 +5,11 @@ from typing import Any
 
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-from tqdm.auto import tqdm
 
 from poi_rec.data.dataset import load_metadata, load_processed_arrays
 from poi_rec.losses.alignment_loss import combined_alignment_loss
 from poi_rec.models.poi_model import POIRecommendationModel
+from poi_rec.training.logging_utils import setup_run_logger
 from poi_rec.training.train import _amp_dtype, _configure_torch_runtime, _dataloader_kwargs, _ensure_processed
 from poi_rec.utils.random import resolve_device, set_seed
 
@@ -22,21 +22,47 @@ def _alignment_state_dict(model: POIRecommendationModel) -> dict[str, torch.Tens
     }
 
 
+def _alignment_checkpoint_is_compatible(path: Path, metadata: dict[str, Any], device: torch.device) -> bool:
+    if not path.exists():
+        return False
+    state = torch.load(path, map_location=device, weights_only=True)
+    if state.get("preprocess_fingerprint") != metadata.get("preprocess_fingerprint"):
+        return False
+    for key in ("num_pois", "num_categories", "node2vec_dim", "text_embedding_dim"):
+        if state.get(key) != metadata.get(key):
+            return False
+    return "alignment_state" in state
+
+
 def pretrain_alignment_from_config(config: dict[str, Any]) -> None:
     set_seed(int(config.get("seed", 42)))
     _ensure_processed(config)
     processed_dir = Path(config["processed_dir"])
     run_dir = Path(config["run_dir"])
     run_dir.mkdir(parents=True, exist_ok=True)
+    logger = setup_run_logger(
+        "poi_rec.alignment_pretrain",
+        Path(config.get("alignment_pretrain_log_path", run_dir / "alignment_pretrain.log")),
+        log_to_console=bool(config.get("log_to_console", True)),
+    )
+    logger.info("alignment pretraining started; run_dir=%s", run_dir)
 
     metadata = load_metadata(processed_dir)
+    device = resolve_device(str(config.get("device", "auto")))
+    _configure_torch_runtime(config, device)
+    checkpoint_path = Path(config.get("alignment_checkpoint") or run_dir / "alignment_pretrain.pt")
+    if bool(config.get("reuse_alignment_checkpoint", True)) and _alignment_checkpoint_is_compatible(
+        checkpoint_path,
+        metadata,
+        device,
+    ):
+        logger.info("reuse compatible alignment checkpoint: %s", checkpoint_path)
+        return
     arrays = load_processed_arrays(processed_dir)
     train_seen = arrays["train_seen_poi"].bool()
     poi_ids = torch.nonzero(train_seen, as_tuple=False).flatten()
     if poi_ids.numel() == 0:
         raise ValueError("No train-seen POIs are available for alignment pretraining.")
-    device = resolve_device(str(config.get("device", "auto")))
-    _configure_torch_runtime(config, device)
     dataset = TensorDataset(poi_ids)
     loader = DataLoader(
         dataset,
@@ -68,8 +94,7 @@ def pretrain_alignment_from_config(config: dict[str, Any]) -> None:
     for epoch in range(1, epochs + 1):
         model.train()
         total = 0.0
-        pbar = tqdm(loader, desc=f"align pretrain {epoch}", leave=False)
-        for batch in pbar:
+        for batch in loader:
             raw_poi = batch[0].to(device)
             shifted_poi = raw_poi + 1
             optimizer.zero_grad(set_to_none=True)
@@ -90,10 +115,10 @@ def pretrain_alignment_from_config(config: dict[str, Any]) -> None:
             scaler.step(optimizer)
             scaler.update()
             total += loss.item()
-            pbar.set_postfix(loss=f"{loss.item():.4f}")
-        print(f"alignment pretrain epoch {epoch}: loss={total / max(1, len(loader)):.6f}")
+        logger.info("alignment pretrain epoch %d/%d result: loss=%.6f", epoch, epochs, total / max(1, len(loader)))
 
-    path = run_dir / "alignment_pretrain.pt"
+    path = checkpoint_path
+    path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
         {
             "alignment_state": _alignment_state_dict(model),
@@ -107,4 +132,4 @@ def pretrain_alignment_from_config(config: dict[str, Any]) -> None:
         },
         path,
     )
-    print(f"alignment checkpoint: {path}")
+    logger.info("alignment checkpoint: %s", path)

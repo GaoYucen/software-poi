@@ -9,6 +9,7 @@ from poi_rec.models.alignment import AlignmentModule
 from poi_rec.models.encoders import ProfileEncoder, SemanticEncoder, SpatialEncoder, TemporalEncoder, TopologyEncoder
 from poi_rec.models.fusion import DynamicFusion
 from poi_rec.models.gpt_backbone import GPTBackbone, last_valid_state
+from poi_rec.models.priors import PriorEncoder
 
 
 class POIRecommendationModel(nn.Module):
