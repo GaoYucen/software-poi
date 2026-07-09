@@ -2398,22 +2398,14 @@
     <bcf:citekey order="19" intorder="1">brown2020language</bcf:citekey>
     <bcf:citekey order="19" intorder="2">devlin2019bert</bcf:citekey>
     <bcf:citekey order="20" intorder="1">wei2025pathllm</bcf:citekey>
-    <bcf:citekey order="21" intorder="1">radford2021clip</bcf:citekey>
-    <bcf:citekey order="22" intorder="1">grover2016node2vec</bcf:citekey>
-    <bcf:citekey order="23" intorder="1">brown2020language</bcf:citekey>
+    <bcf:citekey order="21" intorder="1">comapoi</bcf:citekey>
+    <bcf:citekey order="22" intorder="1">radford2021clip</bcf:citekey>
+    <bcf:citekey order="23" intorder="1">grover2016node2vec</bcf:citekey>
     <bcf:citekey order="24" intorder="1">tsmc2014</bcf:citekey>
-    <bcf:citekey order="25" intorder="1">kang2018sasrec</bcf:citekey>
-    <bcf:citekey order="26" intorder="1">sun2019bert4rec</bcf:citekey>
-    <bcf:citekey order="27" intorder="1">duoRec</bcf:citekey>
-    <bcf:citekey order="28" intorder="1">dang2023ticosec</bcf:citekey>
-    <bcf:citekey order="29" intorder="1">crossdr</bcf:citekey>
-    <bcf:citekey order="30" intorder="1">maerec</bcf:citekey>
-    <bcf:citekey order="31" intorder="1">yang2022getnext</bcf:citekey>
-    <bcf:citekey order="32" intorder="1">poigde</bcf:citekey>
-    <bcf:citekey order="33" intorder="1">mtnet</bcf:citekey>
-    <bcf:citekey order="34" intorder="1">diffuRec</bcf:citekey>
-    <bcf:citekey order="35" intorder="1">llm4poi</bcf:citekey>
-    <bcf:citekey order="36" intorder="1">comapoi</bcf:citekey>
+    <bcf:citekey order="25" intorder="1">duoRec</bcf:citekey>
+    <bcf:citekey order="26" intorder="1">maerec</bcf:citekey>
+    <bcf:citekey order="27" intorder="1">poigde</bcf:citekey>
+    <bcf:citekey order="28" intorder="1">comapoi</bcf:citekey>
   </bcf:section>
   <!-- SORTING TEMPLATES -->
   <bcf:sortingtemplate name="none">

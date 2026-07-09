@@ -487,7 +487,6 @@
       \strng{authornamehash}{3194e1556ebc5c352042c0969b68e903}
       \strng{authorfullhash}{66154590c0d2ab7271f81c424137cbba}
       \strng{authorfullhashraw}{66154590c0d2ab7271f81c424137cbba}
-      \field{extraname}{1}
       \field{sortinit}{8}
       \field{sortinithash}{a231b008ebf0ecbe0b4d96dcc159445f}
       \field{labelnamesource}{author}
@@ -823,6 +822,48 @@
       \field{volume}{42}
       \field{year}{2023}
     \endentry
+    \entry{comapoi}{inproceedings}{}{}
+      \name{author}{4}{}{%
+        {{hash=b5819896c00d70ae8f060b38f6dc8506}{%
+           family={Zhong},
+           familyi={Z\bibinitperiod},
+           given={Lin},
+           giveni={L\bibinitperiod}}}%
+        {{hash=43d98b426e53232c140bf3abb773df27}{%
+           family={Wang},
+           familyi={W\bibinitperiod},
+           given={Lingzhi},
+           giveni={L\bibinitperiod}}}%
+        {{hash=3a48ab36d454ca6696e7b6e644842fbe}{%
+           family={Yang},
+           familyi={Y\bibinitperiod},
+           given={Xu},
+           giveni={X\bibinitperiod}}}%
+        {{hash=61c51cf743fc21d5e6d2958db72d21ef}{%
+           family={Liao},
+           familyi={L\bibinitperiod},
+           given={Qing},
+           giveni={Q\bibinitperiod}}}%
+      }
+      \list{location}{1}{%
+        {Padua, Italy}%
+      }
+      \strng{namehash}{7a30c754abaf69f55f390f182bd3754a}
+      \strng{fullhash}{255a0bde6e32289072231689a434b38b}
+      \strng{fullhashraw}{255a0bde6e32289072231689a434b38b}
+      \strng{bibnamehash}{7a30c754abaf69f55f390f182bd3754a}
+      \strng{authorbibnamehash}{7a30c754abaf69f55f390f182bd3754a}
+      \strng{authornamehash}{7a30c754abaf69f55f390f182bd3754a}
+      \strng{authorfullhash}{255a0bde6e32289072231689a434b38b}
+      \strng{authorfullhashraw}{255a0bde6e32289072231689a434b38b}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
+      \field{labelnamesource}{author}
+      \field{labeltitlesource}{title}
+      \field{booktitle}{Proceedings of the 48th International ACM SIGIR Conference on Research and Development in Information Retrieval}
+      \field{title}{CoMaPOI: A Collaborative Multi-Agent Framework for Next POI Prediction Bridging the Gap Between Trajectory and Language}
+      \field{year}{2025}
+    \endentry
     \entry{grover2016node2vec}{inproceedings}{}{}
       \name{author}{2}{}{%
         {{hash=0e7ecffac4441691ff61e0b68d89cd33}{%
@@ -941,8 +982,8 @@
       \strng{authorfullhash}{35d3f3679465486a86a5f1a17474bb38}
       \strng{authorfullhashraw}{35d3f3679465486a86a5f1a17474bb38}
       \field{extraname}{2}
-      \field{sortinit}{3}
-      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
+      \field{sortinit}{2}
+      \field{sortinithash}{8b555b3791beccb63322c22f3320aa9a}
       \field{labelnamesource}{author}
       \field{labeltitlesource}{title}
       \field{journaltitle}{Applied Soft Computing}
@@ -951,92 +992,6 @@
       \field{year}{2024}
       \field{pages}{111086}
       \range{pages}{1}
-    \endentry
-    \entry{llm4poi}{inproceedings}{}{}
-      \true{moreauthor}
-      \true{morelabelname}
-      \name{author}{4}{}{%
-        {{hash=e3ed13005ba5ce1aaf9c7226a94beb2b}{%
-           family={Sun},
-           familyi={S\bibinitperiod},
-           given={Yuxuan},
-           giveni={Y\bibinitperiod}}}%
-        {{hash=40f600783826ea3ca70257a42c8f1a4f}{%
-           family={Guo},
-           familyi={G\bibinitperiod},
-           given={Ruize},
-           giveni={R\bibinitperiod}}}%
-        {{hash=2f4cc163c8766d4437008ea260208de8}{%
-           family={Zhang},
-           familyi={Z\bibinitperiod},
-           given={Jie},
-           giveni={J\bibinitperiod}}}%
-        {{hash=439e8d5e114670edea6f746db3c18b5b}{%
-           family={Chen},
-           familyi={C\bibinitperiod},
-           given={Enhong},
-           giveni={E\bibinitperiod}}}%
-      }
-      \strng{namehash}{2b66a49e760a50c756f9e7e21d656aae}
-      \strng{fullhash}{796c49669bbf0f3ed867ae5b89f881f5}
-      \strng{fullhashraw}{796c49669bbf0f3ed867ae5b89f881f5}
-      \strng{bibnamehash}{2b66a49e760a50c756f9e7e21d656aae}
-      \strng{authorbibnamehash}{2b66a49e760a50c756f9e7e21d656aae}
-      \strng{authornamehash}{2b66a49e760a50c756f9e7e21d656aae}
-      \strng{authorfullhash}{796c49669bbf0f3ed867ae5b89f881f5}
-      \strng{authorfullhashraw}{796c49669bbf0f3ed867ae5b89f881f5}
-      \field{extraname}{2}
-      \field{sortinit}{3}
-      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{booktitle}{Proceedings of the 47th International ACM SIGIR Conference on Research and Development in Information Retrieval}
-      \field{title}{LLM4POI: Large Language Model for Point-of-Interest Recommendation}
-      \field{year}{2024}
-      \field{pages}{1936\bibrangedash 1940}
-      \range{pages}{5}
-    \endentry
-    \entry{comapoi}{inproceedings}{}{}
-      \name{author}{4}{}{%
-        {{hash=b5819896c00d70ae8f060b38f6dc8506}{%
-           family={Zhong},
-           familyi={Z\bibinitperiod},
-           given={Lin},
-           giveni={L\bibinitperiod}}}%
-        {{hash=43d98b426e53232c140bf3abb773df27}{%
-           family={Wang},
-           familyi={W\bibinitperiod},
-           given={Lingzhi},
-           giveni={L\bibinitperiod}}}%
-        {{hash=3a48ab36d454ca6696e7b6e644842fbe}{%
-           family={Yang},
-           familyi={Y\bibinitperiod},
-           given={Xu},
-           giveni={X\bibinitperiod}}}%
-        {{hash=61c51cf743fc21d5e6d2958db72d21ef}{%
-           family={Liao},
-           familyi={L\bibinitperiod},
-           given={Qing},
-           giveni={Q\bibinitperiod}}}%
-      }
-      \list{location}{1}{%
-        {Padua, Italy}%
-      }
-      \strng{namehash}{7a30c754abaf69f55f390f182bd3754a}
-      \strng{fullhash}{255a0bde6e32289072231689a434b38b}
-      \strng{fullhashraw}{255a0bde6e32289072231689a434b38b}
-      \strng{bibnamehash}{7a30c754abaf69f55f390f182bd3754a}
-      \strng{authorbibnamehash}{7a30c754abaf69f55f390f182bd3754a}
-      \strng{authornamehash}{7a30c754abaf69f55f390f182bd3754a}
-      \strng{authorfullhash}{255a0bde6e32289072231689a434b38b}
-      \strng{authorfullhashraw}{255a0bde6e32289072231689a434b38b}
-      \field{sortinit}{3}
-      \field{sortinithash}{ad6fe7482ffbd7b9f99c9e8b5dccd3d7}
-      \field{labelnamesource}{author}
-      \field{labeltitlesource}{title}
-      \field{booktitle}{Proceedings of the 48th International ACM SIGIR Conference on Research and Development in Information Retrieval}
-      \field{title}{CoMaPOI: A Collaborative Multi-Agent Framework for Next POI Prediction Bridging the Gap Between Trajectory and Language}
-      \field{year}{2025}
     \endentry
   \enddatalist
 \endrefsection

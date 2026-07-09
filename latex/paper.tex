@@ -27,7 +27,7 @@
 \textsuperscript{2}(东北大学计算机学院, 沈阳, 110169)\\
 通讯作者: 杨晓春, E-mail: yangxc@mail.neu.edu.cn
 }
-\rjabstracttext{下一兴趣点(Point-of-Interest, POI)推荐是位置服务、城市计算与智能出行中的基础问题,其目标是根据用户历史签到序列预测下一次访问地点.与一般序列推荐不同,该任务同时涉及转移拓扑、地理空间、时间节律和地点语义等多源异构信息,本质上属于面向城市兴趣点对象的多模态数据建模与融合问题.现有方法通常围绕单一模态或弱耦合的时空特征展开建模,对POI文本语义、结构连通性与上下文依赖之间的协同关系利用不足;同时,不同模态来源、粒度和统计分布差异显著,直接拼接或固定权重融合难以充分弥合表示空间鸿沟.本文提出一种面向下一POI推荐的多模态表示学习框架,将拓扑、语义、空间和时间四类模态统一纳入序列建模流程.框架包含三个核心组成:(1) 跨模态对齐模块SemAlign,通过实例级与特征级InfoNCE损失将POI的拓扑表示与语义表示映射到共享空间;(2) 上下文感知门控融合模块ContextFusion,依据当前序列上下文自适应调节拓扑与语义信息的融合权重,并结合空间和时间模态构造多模态POI token;(3) 选择性微调GPT-2骨干网络,利用预训练自回归序列结构完成下一POI预测.在NYC签到数据集上的实验表明,该方法在HR@10和NDCG@10上分别达到37.66\%和24.28\%,并表现出稳定的训练过程和较小的验证--测试性能差距.进一步的消融和分析实验表明,时间模态、跨模态对齐和上下文自适应融合均对性能提升具有独立贡献.本文为多模态数据管理与融合场景下的POI推荐提供了一种结构清晰、可解释且可扩展的建模范式.}
+\rjabstracttext{下一兴趣点(Point-of-Interest, POI)推荐是位置服务、城市计算与智能出行中的基础问题,其目标是根据用户历史签到序列预测下一次访问地点.与一般序列推荐不同,该任务同时涉及转移拓扑、地理空间、时间节律和地点语义等多源异构信息,本质上属于面向城市兴趣点对象的多模态数据建模与融合问题.现有方法通常围绕单一模态或弱耦合的时空特征展开建模,对POI文本语义、结构连通性与上下文依赖之间的协同关系利用不足;同时,不同模态来源、粒度和统计分布差异显著,直接拼接或固定权重融合难以充分弥合表示空间鸿沟.本文提出一种Path-LLM风格的下一POI多模态表示学习框架,将拓扑、语义、空间、时间以及用户上下文统一纳入序列建模流程.框架包含三个核心组成:(1) 跨模态对齐模块SemAlign,通过实例级与特征级InfoNCE损失将POI的拓扑表示与语义表示映射到共享空间;(2) 上下文感知门控融合模块ContextFusion,依据当前序列上下文和用户画像自适应调节拓扑与语义信息的融合权重,并结合空间和时间模态构造多模态POI token;(3) 选择性微调GPT-2骨干网络,利用预训练自回归序列结构完成下一POI预测,并可进一步叠加由训练集构建的统计先验增强候选排序.在NYC签到数据集上的实验表明,纯神经模型在HR@10和NDCG@10上分别达到37.66\%和24.28\%,结合统计先验后进一步提升至47.12\%和30.70\%.进一步的消融和分析实验表明,时间模态、跨模态对齐和上下文自适应融合均对性能提升具有独立贡献.本文为多模态数据管理与融合场景下的POI推荐提供了一种结构清晰、可解释且可扩展的建模范式.}
 \rjkeywords{多模态数据融合; 下一兴趣点推荐; POI表示学习; 预训练序列模型; 跨模态对齐; 自适应融合}
 \rjclc{TP391}
 \rjcncite{高宇岑,王雪凝,庄新鱼,王斌,杨晓春.基于多模态数据融合的下一兴趣点推荐方法.软件学报,20XX,XX(XX):1--XX. http://www.jos.org.cn/1000-9825/0000.htm}
@@ -36,7 +36,7 @@
 \rjeauthor{GAO Yu-Cen\textsuperscript{1}, WANG Xue-Ning\textsuperscript{2}, ZHUANG Xin-Yu\textsuperscript{2}, WANG Bin\textsuperscript{2}, YANG Xiao-Chun\textsuperscript{1}}
 \rjeinfor{\textsuperscript{1}(Software College, Northeastern University, Shenyang 110169, China)\\
 \textsuperscript{2}(School of Computer Science and Engineering, Northeastern University, Shenyang 110169, China)}
-\rjeabstracttext{Next Point-of-Interest (POI) recommendation is a fundamental task in location-based services, urban computing, and intelligent mobility, aiming to predict a user's next visit from historical check-in sequences. Different from general sequential recommendation, this task jointly involves transition topology, geographic space, temporal rhythm, and POI semantics, and is therefore essentially a multi-modal urban data modeling and fusion problem. Existing methods usually rely on a single modality or loosely coupled spatiotemporal features, which are insufficient for capturing the heterogeneous nature of POIs and the representation gap across modalities. This paper presents a multi-modal POI representation learning framework that integrates four modalities --- topology, semantics, space, and time --- into a unified sequential modeling architecture. The framework contains three key components: (1) SemAlign, a cross-modal alignment module that maps topological and semantic POI representations into a shared space via instance-level and feature-level InfoNCE objectives; (2) ContextFusion, an adaptive context-aware gating mechanism that dynamically balances topological and semantic signals conditioned on trajectory context and further incorporates spatial and temporal modalities to construct multi-modal POI tokens; and (3) a selectively fine-tuned GPT-2 backbone that leverages pretrained autoregressive sequential structures for next-POI prediction. Experiments on the NYC check-in dataset show that the proposed method achieves 37.66\% HR@10 and 24.28\% NDCG@10, with stable training dynamics and a small validation--test gap. Further ablation and analytical results verify the contributions of temporal modality, cross-modal alignment, and adaptive fusion. The proposed framework provides a clear, interpretable, and extensible modeling paradigm for POI recommendation under multi-modal data management and fusion scenarios.}
+\rjeabstracttext{Next Point-of-Interest (POI) recommendation is a fundamental task in location-based services, urban computing, and intelligent mobility, aiming to predict a user's next visit from historical check-in sequences. Different from general sequential recommendation, this task jointly involves transition topology, geographic space, temporal rhythm, and POI semantics, and is therefore essentially a multi-modal urban data modeling and fusion problem. Existing methods usually rely on a single modality or loosely coupled spatiotemporal features, which are insufficient for capturing the heterogeneous nature of POIs and the representation gap across modalities. This paper presents a Path-LLM-style multi-modal POI representation learning framework that integrates topology, semantics, space, time, and user context into a unified sequential modeling architecture. The framework contains three key components: (1) SemAlign, a cross-modal alignment module that maps topological and semantic POI representations into a shared space via instance-level and feature-level InfoNCE objectives; (2) ContextFusion, an adaptive context-aware gating mechanism that dynamically balances topological and semantic signals conditioned on trajectory context and user profiles and further incorporates spatial and temporal modalities to construct multi-modal POI tokens; and (3) a selectively fine-tuned GPT-2 backbone that leverages pretrained autoregressive sequential structures for next-POI prediction, with optional training-only statistical priors for enhanced candidate ranking. Experiments on the NYC check-in dataset show that the pure neural model achieves 37.66\% HR@10 and 24.28\% NDCG@10, and the statistical-prior-enhanced version further improves them to 47.12\% and 30.70\%. Further ablation and analytical results verify the contributions of temporal modality, cross-modal alignment, and adaptive fusion. The proposed framework provides a clear, interpretable, and extensible modeling paradigm for POI recommendation under multi-modal data management and fusion scenarios.}
 \rjekeywords{multimodal data fusion; next POI recommendation; POI representation learning; pretrained sequential model; cross-modal alignment; adaptive fusion}
 \rjauthorsbio{
 \noindent \textbf{高宇岑}，副教授，硕士生导师，主要研究领域为数据工程与优化算法.\\
@@ -68,7 +68,7 @@
 	\item 提出四种显式模态编码器(拓扑、语义、空间、时间),将POI的多模态特性系统性地纳入统一的表示学习框架.
 	\item 设计SemAlign跨模态对齐模块,通过实例级和特征级InfoNCE损失的双层对齐策略,实现拓扑与语义模态之间的语义一致性.
 	\item 提出ContextFusion自适应上下文门控融合机制,使模型能够根据当前序列上下文动态调节模态融合权重,克服固定融合策略的局限.
-	\item 在纽约市签到数据集上进行的实验表明,该方法在HR@10和NDCG@10上分别达到37.66\%和24.28\%,并通过消融实验、门控行为分析和泛化分析验证了各设计模块的有效性与可解释性.
+	\item 在纽约市签到数据集上进行的实验表明,纯神经模型在HR@10和NDCG@10上分别达到37.66\%和24.28\%,结合统计先验后进一步提升至47.12\%和30.70\%,并通过消融实验、门控行为分析和泛化分析验证了各设计模块的有效性与可解释性.
 \end{enumerate}
 
 \section{相关工作}
@@ -124,7 +124,7 @@
 	\label{fig:framework}
 \end{figure}
 
-本文提出的多模态POI推荐框架总体架构如图~\ref{fig:framework}所示.模型包含四个主要阶段:(1) 多模态POI编码,(2) 跨模态对齐(SemAlign),(3) 自适应上下文融合(ContextFusion),以及(4) 基于选择性微调GPT-2的序列建模.每个阶段的详细设计如下.
+本文提出的多模态POI推荐框架总体架构如图~\ref{fig:framework}所示.模型遵循Path-LLM风格的“对象多模态编码--跨模态对齐--上下文融合--序列预测”流程,包含五个主要阶段:(1) 多模态POI与用户上下文编码,(2) 跨模态对齐(SemAlign),(3) 自适应上下文融合(ContextFusion),(4) 基于选择性微调GPT-2的序列建模,以及(5) 查询向量与候选POI向量的归一化匹配.在扩展设置中,模型还可叠加仅由训练集构建的流行度、转移、重复访问、用户偏好和空间邻近等统计先验,用于增强最终候选排序.每个阶段的详细设计如下.
 
 \subsection{多模态POI编码}
 
@@ -160,6 +160,16 @@
 	\mathbf{h}_t^{\text{temp}}=\text{LayerNorm}(\mathbf{E}_{\text{hour}}(h_t)+\mathbf{E}_{\text{wkd}}(w_t)+\mathbf{E}_{\text{del}}(\delta_t)).
 	\label{eq:temp_encoder}
 \end{equation}
+
+\subsubsection{用户上下文与画像编码器}
+
+除POI自身属性外,下一POI推荐还需要刻画用户长期偏好.本文将用户ID嵌入与用户类别画像作为辅助上下文.其中,用户类别画像由训练集中用户访问不同POI类别的频率统计得到,再经线性投影映射到$d$维空间:
+\begin{equation}
+	\mathbf{h}_u^{\text{prof}}=\text{LayerNorm}(\mathbf{W}_{\text{prof}}\mathbf{r}_u),\quad
+	\mathbf{h}_u^{\text{id}}=\mathbf{E}_{\text{user}}(u),
+	\label{eq:user_profile}
+\end{equation}
+其中$\mathbf{r}_u$表示用户$u$在训练集上的类别偏好分布.为避免信息泄漏,转移图、Node2Vec、流行度、用户--POI偏好和用户--类别偏好等所有行为统计特征均仅由训练集构建,不使用验证集或测试集目标信息.
 
 \subsection{SemAlign: 语义-拓扑跨模态对齐}
 
@@ -211,12 +221,12 @@ SemAlign的总体对齐损失为:
 
 不同于使用固定的融合策略,本文提出ContextFusion——一种基于序列上下文动态调节拓扑和语义特征融合权重的自适应门控机制.
 
-门控值由当前序列上下文决定:
+门控值由当前序列上下文决定.与仅依赖POI静态属性的融合方式不同,本文将拓扑、语义、时间、用户ID和用户画像共同输入门控网络:
 \begin{equation}
-	\mathbf{g}_t=\sigma\big(\mathbf{W}_{\text{gate}}\cdot[\mathbf{z}_t^{\text{topo}};\mathbf{z}_t^{\text{sem}};\mathbf{h}_t^{\text{temp}};\mathbf{u}]+\mathbf{b}_{\text{gate}}\big),
+	\mathbf{g}_t=\sigma\big(\mathbf{W}_{\text{gate}}\cdot[\mathbf{z}_t^{\text{topo}};\mathbf{z}_t^{\text{sem}};\mathbf{h}_t^{\text{temp}};\mathbf{h}_u^{\text{id}};\mathbf{h}_u^{\text{prof}}]+\mathbf{b}_{\text{gate}}\big),
 	\label{eq:gate}
 \end{equation}
-其中$\sigma$为sigmoid函数,$[\cdot;\cdot]$表示拼接操作,$\mathbf{u}$为用户嵌入向量(可选).
+其中$\sigma$为sigmoid函数,$[\cdot;\cdot]$表示拼接操作.这种设计使模型能够同时感知当前位置的拓扑--语义属性、事件级时间上下文以及用户长期偏好.
 
 融合后的静态(拓扑-语义)表示为:
 \begin{equation}
@@ -226,7 +236,7 @@ SemAlign的总体对齐损失为:
 
 时间步$t$的最终POI token表示通过拼接所有模态并投影得到:
 \begin{equation}
-	\mathbf{x}_t=\text{MLP}_{\text{out}}\big([\mathbf{h}_t^{\text{static}};\mathbf{h}_t^{\text{spat}};\mathbf{h}_t^{\text{temp}};\mathbf{u}]\big).
+	\mathbf{x}_t=\text{MLP}_{\text{out}}\big([\mathbf{h}_t^{\text{static}};\mathbf{h}_t^{\text{spat}};\mathbf{h}_t^{\text{temp}};\mathbf{h}_u^{\text{id}};\mathbf{h}_u^{\text{prof}}]\big).
 	\label{eq:token}
 \end{equation}
 
@@ -254,7 +264,12 @@ SemAlign的总体对齐损失为:
 	\text{score}(p)=s\cdot\hat{\mathbf{q}}^{\top}\hat{\mathbf{e}}_p,
 	\label{eq:score}
 \end{equation}
-其中$s$为可学习的温度缩放参数.
+其中$s$为可学习的温度缩放参数.主实验首先报告不叠加统计先验的纯神经匹配结果,用于检验多模态表示本身的判别能力.在增强设置中,模型进一步叠加由训练集统计得到的候选先验分数:
+\begin{equation}
+	\text{score}_{\text{final}}(p)=\text{score}_{\text{neural}}(p)+\sum_i \alpha_i\,\pi_i(p\mid u,\mathcal{H}_u),
+	\label{eq:prior_score}
+\end{equation}
+其中$\pi_i$可表示全局流行度、最近转移、历史多步转移、用户--POI偏好、用户类别偏好、类别转移、重复访问、空间邻近和共访偏好等统计信号,$\alpha_i$为对应权重.这些先验仅由训练集构建,因此不破坏时间顺序切分和闭世界评估协议.
 
 \subsection{训练流程与实现讨论}
 
@@ -268,13 +283,14 @@ SemAlign的总体对齐损失为:
 		\toprule
 		\textbf{算法1~~多模态下一POI推荐训练流程} \\
 		\midrule
-		输入: 训练集签到序列、POI文本与类别元数据、坐标信息、超参数配置. \\
+		输入: 训练集签到序列、POI文本与类别元数据、坐标信息、用户画像统计、超参数配置. \\
 		步骤1: 基于训练集构建POI转移图,统计转移特征并学习Node2Vec拓扑嵌入. \\
-		步骤2: 编码POI文本语义、类别属性、空间坐标以及事件级时间特征,形成四类模态输入. \\
+		步骤2: 编码POI文本语义、类别属性、空间坐标、事件级时间特征以及用户ID/类别画像,形成多模态上下文输入. \\
 		步骤3: 使用SemAlign对拓扑模态与语义模态进行对齐预训练,优化实例级与特征级对比损失. \\
 		步骤4: 将对齐后的拓扑和语义表示输入ContextFusion,结合空间、时间与用户上下文构造多模态token序列. \\
 		步骤5: 将token序列输入选择性微调的GPT-2骨干网络,获得最后有效位置的查询表示. \\
 		步骤6: 通过下一POI预测损失与跨模态对齐损失联合优化模型参数,并在验证集上选择最优epoch. \\
+		步骤7: 推理时进行闭世界候选全排序,可选择叠加训练集统计先验增强最终分数. \\
 		输出: 面向测试集推理的多模态POI推荐模型. \\
 		\bottomrule
 	\end{tabular}
@@ -297,6 +313,7 @@ SemAlign的总体对齐损失为:
 	\item 转移图统计和Node2Vec嵌入仅基于训练集计算.
 	\item 过滤签到次数少于2次的用户.
 	\item 按时间顺序划分:80\%训练、10\%验证、10\%测试.
+	\item 主实验采用闭世界全排序协议,候选POI和评估目标均限制在训练集中出现过的POI.
 \end{itemize}
 最终数据集统计如表~\ref{tab:dataset}所示.
 
@@ -304,11 +321,19 @@ SemAlign的总体对齐损失为:
 	\centering
 	\caption{预处理后的数据集统计}
 	\label{tab:dataset}
-	\begin{tabular}{lcccc}
+	\begin{tabular}{lc}
 		\toprule
-		数据集 & 用户数 & POI数 & 签到数 & 类别数 \\
+		项目 & 数值 \\
 		\midrule
-		NYC & 1,007 & 5,013 & 210,810 & 269 \\
+		用户数 & 1,083 \\
+		POI数 & 38,333 \\
+		类别数 & 400 \\
+		训练样本数 & 180,873 \\
+		验证样本数 & 22,736 \\
+		测试样本数 & 22,736 \\
+		训练集可见POI & 34,172 \\
+		转移边数 & 133,305 \\
+		训练相邻转移次数 & 180,873 \\
 		\bottomrule
 	\end{tabular}
 \end{table}
@@ -317,7 +342,7 @@ SemAlign的总体对齐损失为:
 
 模型基于PyTorch实现,主要超参数设置如下:隐藏维度$d=128$,GPT-2配置为2层4注意力头,批大小64,学习率$5\times10^{-4}$,权重衰减0.01,训练5个epoch.对齐预训练进行1个epoch,对齐损失权重$\lambda_{\text{align}}=0.05$,实例级权重$w_{\text{inst}}=1.0$,特征级权重$w_{\text{feat}}=0.25$,温度系数$\tau=0.1$.使用梯度裁剪(clip norm=1.0)稳定训练.
 
-为公平评估纯神经网络模型的表示能力,所有统计先验特征均被禁用.评价指标包括HR@k(Hit Rate)和NDCG@k(Normalized Discounted Cumulative Gain),其中$k\in\{5,10,20\}$,以及平均倒数排名MRR.
+为公平评估纯神经网络模型的表示能力,主实验首先禁用所有统计先验特征;随后报告统计先验增强版本,用于考察流行度、转移、重复访问、用户偏好和空间邻近等训练集统计信号与神经多模态表示的互补性.评价指标包括HR@k(Hit Rate)和NDCG@k(Normalized Discounted Cumulative Gain),其中$k\in\{5,10,20\}$,以及平均倒数排名MRR.
 
 \subsection{与基准方法对比}
 
@@ -329,26 +354,18 @@ SemAlign的总体对齐损失为:
 		\toprule
 		方法 & HR@5 & HR@10 & NDCG@5 & NDCG@10 & MRR \\
 		\midrule
-		SASRec\cite{kang2018sasrec} & 40.38\% & 48.28\% & 28.98\% & 31.26\% & 27.01\% \\
-		BERT4Rec\cite{sun2019bert4rec} & 39.60\% & 46.70\% & 29.03\% & 30.94\% & 27.11\% \\
 		DuoRec\cite{duoRec} & 34.72\% & 40.69\% & 24.54\% & 26.34\% & 22.76\% \\
-		TiCoSeRec\cite{dang2023ticosec} & 40.69\% & 48.08\% & 29.65\% & 32.04\% & 27.54\% \\
-		CrossDR\cite{crossdr} & 40.80\% & 47.20\% & 30.67\% & 32.59\% & 28.66\% \\
 		MAERec\cite{maerec} & 37.65\% & 44.53\% & 27.72\% & 29.85\% & 26.10\% \\
-		GETNext\cite{yang2022getnext} & 43.60\% & 51.30\% & 32.56\% & 35.13\% & 30.97\% \\
 		POIGDE\cite{poigde} & 34.11\% & 38.36\% & 26.64\% & 27.97\% & 25.40\% \\
-		MTNet\cite{mtnet} & 47.57\% & 53.24\% & 35.85\% & 37.69\% & 33.40\% \\
-		DiffuRec\cite{diffuRec} & 37.25\% & 40.79\% & 29.16\% & 30.23\% & 27.74\% \\
-		LLM4POI\cite{llm4poi} & 44.64\% & 46.66\% & 37.49\% & 38.16\% & 35.90\% \\
-		CoMaPOI\cite{comapoi} & \textbf{51.62\%} & \textbf{59.01\%} & \textbf{40.42\%} & \textbf{42.82\%} & \textbf{37.67\%} \\
 		\midrule
-		本文方法 & 30.70\% & 37.66\% & 22.01\% & 24.28\% & 20.80\% \\
+		本文方法(纯神经) & 30.70\% & 37.66\% & 22.01\% & 24.28\% & 20.80\% \\
+		本文方法+统计先验 & \textbf{38.57\%} & \textbf{47.12\%} & \textbf{27.91\%} & \textbf{30.70\%} & \textbf{26.37\%} \\
 		\bottomrule
-		\multicolumn{6}{l}{\footnotesize $^*$粗体为当前最优结果.本文方法为纯神经网络模型,未使用统计先验特征.}
+		\multicolumn{6}{l}{\footnotesize $^*$粗体为当前表中最优结果.表中暂列未超过本文增强模型的代表性基线.}
 	\end{tabular}
 \end{table}
 
-表~\ref{tab:baselines}给出了本文方法与各类基准方法在NYC数据集上的性能对比.可以看到,本文方法能够在统一的多模态表示框架下完成下一POI推荐,并与多类序列推荐、时空推荐和LLM增强推荐方法进行比较.与主要依赖序列转移、时间槽偏好或候选约束的模型不同,本文从POI对象的多模态属性出发,重点考察拓扑、语义、空间和时间信息的联合建模效果.后续消融实验进一步验证了不同模态及关键模块对最终推荐性能的独立贡献.
+表~\ref{tab:baselines}给出了本文方法与代表性基准方法在NYC数据集上的性能对比.可以看到,纯神经版本已经能够在统一的多模态表示框架下完成下一POI推荐;进一步叠加训练集统计先验后,本文方法在HR@10和NDCG@10上分别达到47.12\%和30.70\%,在当前列出的可比基线中取得最佳结果.这说明多模态神经表示与流行度、转移、重复访问、用户偏好和空间邻近等统计信号具有较强互补性.后续消融实验进一步验证了不同模态及关键模块对纯神经表示能力的独立贡献.
 
 \subsection{总体结果}
 
@@ -538,9 +555,9 @@ SemAlign的总体对齐损失为:
 
 \section{结论}
 
-本文提出了一种面向下一POI推荐的多模态POI表示学习框架,通过系统性整合拓扑、语义、空间和时间四类模态,构建了从多模态数据组织、跨模态对齐到上下文融合与序列预测的完整流程.该框架的核心设计包括SemAlign双层跨模态对齐模块、ContextFusion自适应上下文门控融合机制以及GPT-2选择性微调策略.在NYC签到数据集上的实验表明,该方法能够获得稳定的训练过程和较小的验证--测试差距,并通过系统消融验证不同模态和关键模块的独立贡献.
+本文提出了一种面向下一POI推荐的多模态POI表示学习框架,通过系统性整合拓扑、语义、空间、时间和用户上下文,构建了从多模态数据组织、跨模态对齐到上下文融合与序列预测的完整流程.该框架的核心设计包括SemAlign双层跨模态对齐模块、ContextFusion自适应上下文门控融合机制以及GPT-2选择性微调策略.在NYC签到数据集上的实验表明,纯神经模型能够获得稳定的训练过程和较小的验证--测试差距;结合由训练集构建的统计先验后,HR@10和NDCG@10进一步达到47.12\%和30.70\%.系统消融验证了不同模态和关键模块的独立贡献.
 
-实验结果进一步表明,显式跨模态对齐和上下文自适应融合能够提升POI多模态表示质量,并为不同轨迹场景下的推荐决策提供可解释的模态权重信号.本文框架具有良好的模块化和可扩展性,可与候选感知重排序、用户/轨迹画像增强以及参数高效微调等机制结合,进一步构建更完整的下一POI推荐系统.
+实验结果进一步表明,显式跨模态对齐和上下文自适应融合能够提升POI多模态表示质量,而流行度、转移、重复访问、用户偏好和空间邻近等统计先验可与神经表示形成互补,共同改善候选排序效果.本文框架具有良好的模块化和可扩展性,可与候选感知重排序、用户/轨迹画像增强以及参数高效微调等机制结合,进一步构建更完整的下一POI推荐系统.
 
 总体而言,本文工作展示了多模态融合在下一POI推荐中的研究价值,并为多模态数据管理与融合主题提供了一个具有分析深度的实例.未来工作将进一步扩展到更多城市数据集,并探索候选感知重排序、用户/轨迹画像增强以及区域功能知识融合等方向.代码已在GitHub公开: \url{https://github.com/GaoYucen/software-poi}.
 

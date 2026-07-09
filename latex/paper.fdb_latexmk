@@ -1,18 +1,18 @@
 # Fdb version 4
-["biber paper"] 1783366923.6032 "paper.bcf" "paper.bbl" "paper" 1783366933.29393 0
-  "paper.bcf" 1783366932.58457 109303 e53d0f7d1dc9a2e3afebb31c26d33a76 "xelatex"
-  "references.bib" 1783355225.86106 6393 bd9f3aa05f77cdf2fd856fde9ced8144 ""
+["biber paper"] 1783582008.98003 "paper.bcf" "paper.bbl" "paper" 1783582021.18129 0
+  "paper.bcf" 1783582018.78193 109996 35192483ea3c8e1e0099c52436c04f54 "xelatex"
+  "references.bib" 1783367595.38888 9937 89a1f3683fc6de987cb3157f77d7dae3 ""
   (generated)
   "paper.bbl"
   "paper.blg"
   (rewritten before read)
-["xdvipdfmx"] 1783366932.66391 "paper.xdv" "paper.pdf" "paper" 1783366933.2958 0
-  "paper.xdv" 1783366932.58597 226016 1eb175f9f0c4d54c69ad61823b0e9745 "xelatex"
+["xdvipdfmx"] 1783582018.86238 "paper.xdv" "paper.pdf" "paper" 1783582021.18319 0
+  "paper.xdv" 1783582018.78324 355200 4e2ef0f2385014a38f71d57822b25367 "xelatex"
   (generated)
   "paper.pdf"
   (rewritten before read)
-["xelatex"] 1783366930.40517 "/Users/gaoyucen/poi/latex/paper.tex" "paper.xdv" "paper" 1783366933.29404 0
-  "/Users/gaoyucen/poi/latex/paper.tex" 1783366827.91132 32392 fe143da704f06ff75f94a8c2c6ea31ff ""
+["xelatex"] 1783582016.44316 "/Users/gaoyucen/poi/latex/paper.tex" "paper.xdv" "paper" 1783582021.18139 0
+  "/Users/gaoyucen/poi/latex/paper.tex" 1783581903.0362 49932 3dd4e3876b8bbe866eeba1389eb001a8 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/map/fontname/texfonts.map" 1577235249 3524 cb3e574dea2d1052e39280babc910dc8 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex7.tfm" 1246382020 1004 54797486969f23fa377b128694d548df ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/amsfonts/cmextra/cmex8.tfm" 1246382020 988 bdf658c3bfc2d96d3c8b02cfc1c94c20 ""
@@ -23,14 +23,12 @@
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm10.tfm" 1246382020 908 2921f8a10601f252058503cc6570e581 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm5.tfm" 1246382020 940 75ac932a52f80982a9f8ea75d03a34cf ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/amsfonts/symbols/msbm7.tfm" 1246382020 940 228d6584342e91276bf566bcf9716b83 ""
-  "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/bbm/bbm10.tfm" 1227036886 560 39fd35b5e4a6aca3672660cc548ba860 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/bbm/bbm5.tfm" 1227036886 556 9c04e2d7f25768427a52589d484d3199 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/bbm/bbm6.tfm" 1227036886 560 4c5ff0e6c23877f3f630ae9d8ef92c6e ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/bbm/bbm7.tfm" 1227036886 560 ab71d518408103034050efd8ebc8a16a ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/bbm/bbm8.tfm" 1227036886 560 2e80f8a1cb59527f57d99bb5fccd0f3c ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/bbm/bbm9.tfm" 1227036886 564 538e51111886634ef38425dfff2e2694 ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/cm/cmex10.tfm" 1136768653 992 662f679a0b3d2d53c1b94050fdaa3f50 ""
-  "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/cm/cmmi10.tfm" 1136768653 1528 abec98dbc43e172678c11b3b9031252a ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/cm/cmmi12.tfm" 1136768653 1524 4414a8315f39513458b80dfc63bff03a ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/cm/cmmi5.tfm" 1136768653 1508 3b32edd0d68f6498a5a375e78f9edc5e ""
   "/usr/local/texlive/2025/texmf-dist/fonts/tfm/public/cm/cmmi6.tfm" 1136768653 1512 f21f83efb36853c0b70002322c1ab3ad ""
@@ -135,9 +133,12 @@
   "/usr/local/texlive/2025/texmf-dist/web2c/texmf.cnf" 1739380943 42148 61becc7c670cd061bb319c643c27fdd4 ""
   "/usr/local/texlive/2025/texmf-var/web2c/xetex/xelatex.fmt" 1765467048 5639800 30b45c8478e04c4181ef0e043932db72 ""
   "/usr/local/texlive/2025/texmf.cnf" 1741450484 577 418a7058ec8e006d8704f60ecd22c938 ""
-  "paper.aux" 1783366932.58134 10466 de12994c967d7c0b2e8ca9b01b47feb5 "xelatex"
-  "paper.bbl" 1783366925.81967 25517 c4fc99edf869ae687a99e28838f803e6 "biber paper"
-  "paper.run.xml" 1783366932.58582 2347 451414b595899738bb3a4554835ba65a "xelatex"
+  "figure/embeddings_tsne.png" 1783499735.35123 284669 93b654fbfa77c204217456e3cf5c1612 ""
+  "figure/framework.png" 1783367671.6768 247087 5cf9dbbe7e25de102eb160ff7426626f ""
+  "figure/gate_distribution.png" 1783499734.38173 110404 0486b11ba419580da1b9006d55439583 ""
+  "paper.aux" 1783582018.77839 13947 5ac24740a6a1c3ded390cda8bc9e6d3d "xelatex"
+  "paper.bbl" 1783582011.54572 41466 946af192d34422ff67ad59af1e965dfd "biber paper"
+  "paper.run.xml" 1783582018.7831 2347 451414b595899738bb3a4554835ba65a "xelatex"
   "rjthesis.cls" 1783209396 6854 a4a083a3ddbe4d664a4aed53c310dbd1 ""
   (generated)
   "paper.aux"
