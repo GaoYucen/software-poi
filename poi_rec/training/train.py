@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 
 import torch
 from torch.utils.data import DataLoader
 
+from poi_rec.data.candidates import DynamicCandidateGenerator
 from poi_rec.data.dataset import POISequenceDataset, load_metadata, load_processed_arrays
 from poi_rec.data.preprocess import build_preprocess_config, preprocess_fingerprint, preprocess_tsmc2014
 from poi_rec.losses.alignment_loss import combined_alignment_loss
@@ -200,14 +202,52 @@ def evaluate_model(
     loader: DataLoader,
     device: torch.device,
     metrics_k: list[int],
+    candidate_generator: DynamicCandidateGenerator | None = None,
 ) -> dict[str, float]:
     model.eval()
     metric_batches = []
+    total_candidates = 0.0
+    total_coverage = 0.0
+    total_count = 0
     for batch in loader:
         batch = _move_batch(batch, device)
-        output = model(batch)
+        if candidate_generator is not None:
+            candidate_ids, candidate_mask = candidate_generator.build(batch)
+            if getattr(model, "use_candidate_reranker", False):
+                candidate_bank = model.candidate_embeddings()
+                candidate_scores = model.scores_for_candidates(
+                    batch,
+                    candidate_ids,
+                    all_candidate_embeddings=candidate_bank,
+                )
+                constrained = torch.full(
+                    (batch["target"].shape[0], model.num_pois),
+                    -1e9,
+                    dtype=candidate_scores.dtype,
+                    device=device,
+                )
+                output = {"scores": constrained}
+            else:
+                output = model(batch)
+                constrained = torch.full_like(output["scores"], -1e9)
+                safe_ids = candidate_ids.clamp(min=0)
+                candidate_scores = output["scores"].gather(1, safe_ids)
+            safe_ids = candidate_ids.clamp(min=0)
+            candidate_scores = candidate_scores.masked_fill(~candidate_mask, -1e9)
+            constrained.scatter_(1, safe_ids, candidate_scores)
+            output["scores"] = constrained
+            target_in_candidates = candidate_ids.eq(batch["target"].unsqueeze(1)).logical_and(candidate_mask).any(dim=1)
+            total_coverage += target_in_candidates.float().sum().item()
+            total_candidates += candidate_mask.float().sum().item()
+            total_count += int(batch["target"].shape[0])
+        else:
+            output = model(batch)
         metric_batches.append(ranking_metric_sums(output["scores"], batch["target"], metrics_k))
-    return average_metric_dicts(metric_batches)
+    metrics = average_metric_dicts(metric_batches)
+    if candidate_generator is not None:
+        metrics["candidate_target_coverage"] = total_coverage / max(1, total_count)
+        metrics["candidate_avg_size"] = total_candidates / max(1, total_count)
+    return metrics
 
 
 def train_from_config(config: dict[str, Any]) -> None:
@@ -344,6 +384,7 @@ def train_from_config(config: dict[str, Any]) -> None:
         total_loss = 0.0
         total_next = 0.0
         total_align = 0.0
+        candidate_bank = model.candidate_embeddings().detach() if getattr(model, "use_candidate_reranker", False) else None
         for batch in train_loader:
             batch = _move_batch(batch, device)
             optimizer.zero_grad(set_to_none=True)
@@ -362,9 +403,17 @@ def train_from_config(config: dict[str, Any]) -> None:
                         hard_history_transition_top=sampled_hard_history_transition_top,
                         hard_popularity_top=int(sampled_cf.get("hard_popularity_top", 64)),
                     )
-                    sampled_scores = model.collaborative_scores_for_candidates(batch, candidate_ids)
-                    if sampled_cf_include_priors:
-                        sampled_scores = sampled_scores + model.prior_scores_for_candidates(batch, candidate_ids)
+                    if getattr(model, "use_candidate_reranker", False):
+                        sampled_scores = model.scores_for_candidates(
+                            batch,
+                            candidate_ids,
+                            include_priors=sampled_cf_include_priors,
+                            all_candidate_embeddings=candidate_bank,
+                        )
+                    else:
+                        sampled_scores = model.collaborative_scores_for_candidates(batch, candidate_ids)
+                        if sampled_cf_include_priors:
+                            sampled_scores = sampled_scores + model.prior_scores_for_candidates(batch, candidate_ids)
                     rec_loss_items = next_poi_loss_per_sample(
                         sampled_scores,
                         torch.zeros(batch["target"].shape[0], dtype=torch.long, device=device),

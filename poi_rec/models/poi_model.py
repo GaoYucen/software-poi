@@ -9,7 +9,7 @@ from poi_rec.models.alignment import AlignmentModule
 from poi_rec.models.encoders import ProfileEncoder, SemanticEncoder, SpatialEncoder, TemporalEncoder, TopologyEncoder
 from poi_rec.models.fusion import DynamicFusion
 from poi_rec.models.gpt_backbone import GPTBackbone, last_valid_state
-from poi_rec.models.priors import PriorEncoder
+from poi_rec.models.priors import CandidateReranker, PriorEncoder
 
 
 class POIRecommendationModel(nn.Module):
@@ -73,6 +73,26 @@ class POIRecommendationModel(nn.Module):
         self.popularity_prior_weight = float(config.get("popularity_prior_weight", 0.0))
         self.spatial_prior_weight = float(config.get("spatial_prior_weight", 0.0))
         self.spatial_prior_temperature = float(config.get("spatial_prior_temperature", 1.0))
+        self.use_prior_encoder = bool(config.get("use_prior_encoder", False))
+        self.use_candidate_reranker = bool(config.get("use_candidate_reranker", False))
+        if self.use_prior_encoder:
+            self.prior_encoder = PriorEncoder(
+                hidden_dim=hidden_dim,
+                num_priors=4,  # popularity, category_transition, user_category, spatial
+                dropout=float(config.get("dropout", 0.1)),
+            )
+        else:
+            self.prior_encoder = None
+        if self.use_candidate_reranker:
+            self.candidate_reranker = CandidateReranker(
+                num_features=10,
+                hidden_dim=int(config.get("candidate_reranker_hidden_dim", 32)),
+                dropout=float(config.get("dropout", 0.1)),
+            )
+            self.candidate_reranker_weight = float(config.get("candidate_reranker_weight", 1.0))
+        else:
+            self.candidate_reranker = None
+            self.candidate_reranker_weight = 0.0
         self._transition_edges_cpu = arrays["transition_edges"].detach().cpu()
         self.transition_prior: dict[int, tuple[torch.Tensor, torch.Tensor]] = self._build_transition_prior(
             self._transition_edges_cpu,
@@ -508,6 +528,132 @@ class POIRecommendationModel(nn.Module):
         candidates = torch.nn.functional.normalize(candidates, dim=-1)
         return self.cf_logit_scale.exp().clamp(max=100.0) * torch.einsum("bd,bcd->bc", query, candidates)
 
+    def neural_scores_for_candidates(
+        self,
+        batch: dict[str, torch.Tensor],
+        candidate_raw_ids: torch.Tensor,
+        all_candidate_embeddings: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        if self.neural_score_weight <= 0:
+            return torch.zeros(candidate_raw_ids.shape, dtype=torch.float32, device=candidate_raw_ids.device)
+        query, _, _, _ = self.encode_sequence(batch)
+        query = self.query_projection(query)
+        candidate_bank = all_candidate_embeddings if all_candidate_embeddings is not None else self.candidate_embeddings()
+        candidates = candidate_bank[candidate_raw_ids]
+        if self.matching_normalize:
+            query = torch.nn.functional.normalize(query, dim=-1)
+            candidates = torch.nn.functional.normalize(candidates, dim=-1)
+        logit_scale = self.logit_scale.exp().clamp(max=100.0)
+        return self.neural_score_weight * logit_scale * torch.einsum("bd,bcd->bc", query, candidates)
+
+    def reranker_scores_for_candidates(
+        self,
+        batch: dict[str, torch.Tensor],
+        candidate_raw_ids: torch.Tensor,
+        base_scores: torch.Tensor,
+        prior_scores: torch.Tensor,
+    ) -> torch.Tensor:
+        if self.candidate_reranker is None or self.candidate_reranker_weight <= 0:
+            return torch.zeros_like(base_scores)
+        device = candidate_raw_ids.device
+        batch_size = candidate_raw_ids.shape[0]
+        num_candidates = candidate_raw_ids.shape[1]
+
+        lengths = batch["attention_mask"].sum(dim=1).clamp(min=1) - 1
+        last_shifted = batch["poi"][torch.arange(batch_size, device=device), lengths]
+        last_raw = (last_shifted - 1).clamp(min=0)
+
+        # --- Feature 0: base neural score ---
+        base = base_scores.float()
+
+        # --- Feature 1: prior score ---
+        prior = prior_scores.float()
+
+        # --- Feature 2: popularity ---
+        popularity = self.popularity_prior[candidate_raw_ids].float()
+
+        # --- Feature 3: category match with last POI ---
+        candidate_category = self.poi_category[candidate_raw_ids]
+        last_category = self.poi_category[last_raw]
+        category_match = candidate_category.eq(last_category.unsqueeze(1)).float()
+
+        # --- Feature 4: repeat flag (was this POI in user history?) ---
+        poi_history = batch["poi"].detach().cpu()
+        mask_history = batch["attention_mask"].detach().cpu()
+        repeat = torch.zeros((batch_size, num_candidates), dtype=torch.float32, device=device)
+        for row_idx in range(batch_size):
+            valid_positions = torch.nonzero(mask_history[row_idx].gt(0), as_tuple=False).flatten().tolist()
+            history_pois = set()
+            for pos in valid_positions:
+                raw = int(poi_history[row_idx, pos].item()) - 1
+                if raw >= 0:
+                    history_pois.add(raw)
+            for cand_idx in range(num_candidates):
+                if int(candidate_raw_ids[row_idx, cand_idx].item()) in history_pois:
+                    repeat[row_idx, cand_idx] = 1.0
+
+        # --- Feature 5: spatial distance to last POI ---
+        coords = self.spatial.poi_coords
+        last_coords = coords[last_raw]
+        candidate_coords = coords[candidate_raw_ids]
+        spatial_dist = torch.sqrt(
+            ((candidate_coords - last_coords.unsqueeze(1)) ** 2).sum(dim=-1).clamp(min=1e-8)
+        )
+        spatial_distance = torch.exp(-spatial_dist * 10.0)
+
+        # --- Feature 6: hour match score (visit frequency at this hour slot) ---
+        last_positions = (lengths.detach().cpu().tolist() if lengths.numel() > 0 else [])
+        hour_match = torch.zeros((batch_size, num_candidates), dtype=torch.float32, device=device)
+        for row_idx in range(batch_size):
+            if row_idx < len(last_positions):
+                hour = int(batch["hour"][row_idx, last_positions[row_idx]].item())
+                weekday = int(batch["weekday"][row_idx, last_positions[row_idx]].item())
+                # Simple heuristic: prefer POIs visited at similar hours
+                # Using a fixed preference: POIs with category_match get extra hour bonus
+                hour_match[row_idx] = category_match[row_idx] * 0.5 + 0.5 * (1.0 - abs(float(hour) - 12.0) / 12.0)
+
+        # --- Feature 7: last distance score (alternative spatial encoding) ---
+        last_distance = torch.clamp(spatial_dist / max(self.spatial_prior_temperature, 1e-6), max=50.0)
+        last_distance_score = torch.exp(-last_distance * 0.5)
+
+        # --- Feature 8: category transition prior ---
+        cat_trans = torch.zeros((batch_size, num_candidates), dtype=torch.float32, device=device)
+        if self.category_transition_prior_weight > 0 or hasattr(self, "category_transition_prior_matrix"):
+            cat_trans = self.category_transition_prior_matrix[
+                last_category.unsqueeze(1), candidate_category
+            ].float()
+
+        # --- Feature 9: user category bias ---
+        user_cat = torch.zeros((batch_size, num_candidates), dtype=torch.float32, device=device)
+        if self.user_category_prior_weight > 0 or hasattr(self, "user_category_prior_matrix"):
+            user_cat = self.user_category_prior_matrix[
+                batch["user_idx"].unsqueeze(1), candidate_category
+            ].float()
+
+        features = torch.stack(
+            [base, prior, popularity, category_match, repeat,
+             spatial_distance, hour_match, last_distance_score, cat_trans, user_cat],
+            dim=-1,
+        )
+        return self.candidate_reranker_weight * self.candidate_reranker(features)
+
+    def scores_for_candidates(
+        self,
+        batch: dict[str, torch.Tensor],
+        candidate_raw_ids: torch.Tensor,
+        include_priors: bool = True,
+        all_candidate_embeddings: torch.Tensor | None = None,
+    ) -> torch.Tensor:
+        scores = self.neural_scores_for_candidates(batch, candidate_raw_ids, all_candidate_embeddings=all_candidate_embeddings)
+        if self.collaborative_score_weight > 0:
+            scores = scores + self.collaborative_score_weight * self.collaborative_scores_for_candidates(
+                batch, candidate_raw_ids
+            )
+        prior_scores = self.prior_scores_for_candidates(batch, candidate_raw_ids) if include_priors else torch.zeros_like(scores)
+        scores = scores + prior_scores
+        scores = scores + self.reranker_scores_for_candidates(batch, candidate_raw_ids, scores, prior_scores)
+        return scores
+
     def prior_scores_for_candidates(
         self,
         batch: dict[str, torch.Tensor],
@@ -649,8 +795,45 @@ class POIRecommendationModel(nn.Module):
             )
         return scores
 
+    def _collect_dense_prior_features(
+        self,
+        batch: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Collect dense (non-sparse) prior scores: popularity, category_transition, user_category, spatial.
+
+        Returns:
+            shape (batch_size, num_pois, 4) tensor of raw prior scores.
+        """
+        device = batch["poi"].device
+        batch_size = batch["poi"].shape[0]
+        num_pois = self.num_pois
+        prior_feats = torch.zeros((batch_size, num_pois, 4), device=device)
+
+        # 0: popularity prior
+        prior_feats[:, :, 0] = self.popularity_prior.unsqueeze(0)
+
+        lengths = batch["attention_mask"].sum(dim=1).clamp(min=1) - 1
+        last_shifted = batch["poi"][torch.arange(batch_size, device=device), lengths]
+        last_raw = (last_shifted - 1).clamp(min=0)
+
+        # 1: category_transition prior
+        last_category = self.poi_category[last_raw]
+        candidate_category = self.poi_category
+        prior_feats[:, :, 1] = self.category_transition_prior_matrix[last_category][:, candidate_category]
+
+        # 2: user_category prior
+        prior_feats[:, :, 2] = self.user_category_prior_matrix[batch["user_idx"]][:, candidate_category]
+
+        # 3: spatial prior
+        coords = self.spatial.poi_coords
+        last_coords = coords[last_raw]
+        distance_sq = ((last_coords.unsqueeze(1) - coords.unsqueeze(0)) ** 2).sum(dim=-1)
+        prior_feats[:, :, 3] = torch.exp(-distance_sq / max(self.spatial_prior_temperature, 1e-6))
+
+        return prior_feats
+
     def _apply_candidate_priors(self, scores: torch.Tensor, batch: dict[str, torch.Tensor]) -> torch.Tensor:
-        if (
+        if not self.use_prior_encoder and (
             self.transition_prior_weight <= 0
             and self.history_transition_prior_weight <= 0
             and self.user_poi_prior_weight <= 0
@@ -662,13 +845,38 @@ class POIRecommendationModel(nn.Module):
             and self.spatial_prior_weight <= 0
         ):
             return scores
-        adjusted = scores
-        if self.popularity_prior_weight > 0:
-            adjusted = adjusted + self.popularity_prior_weight * self.popularity_prior.unsqueeze(0)
+        # Work in float32 to avoid dtype mismatches when index_put_ with float32 prior values
+        adjusted = scores.float()
 
         lengths = batch["attention_mask"].sum(dim=1).clamp(min=1) - 1
         last_shifted = batch["poi"][torch.arange(batch["poi"].shape[0], device=batch["poi"].device), lengths]
         last_raw = (last_shifted - 1).clamp(min=0)
+
+        # When PriorEncoder is enabled, replace the 4 dense priors (popularity, category_transition,
+        # user_category, spatial) with a learned non-linear combination.
+        if self.use_prior_encoder and self.prior_encoder is not None:
+            dense_feats = self._collect_dense_prior_features(batch)
+            # Under autocast, linear layers output bf16, but we need float32 for adjusted
+            learned_prior_scores = self.prior_encoder(dense_feats).float()
+            adjusted = adjusted + learned_prior_scores
+        else:
+            if self.popularity_prior_weight > 0:
+                adjusted = adjusted + self.popularity_prior_weight * self.popularity_prior.unsqueeze(0)
+            if self.category_transition_prior_weight > 0:
+                last_category = self.poi_category[last_raw]
+                candidate_category = self.poi_category
+                category_scores = self.category_transition_prior_matrix[last_category][:, candidate_category]
+                adjusted = adjusted + self.category_transition_prior_weight * category_scores
+            if self.user_category_prior_weight > 0:
+                candidate_category = self.poi_category
+                category_scores = self.user_category_prior_matrix[batch["user_idx"]][:, candidate_category]
+                adjusted = adjusted + self.user_category_prior_weight * category_scores
+            if self.spatial_prior_weight > 0:
+                coords = self.spatial.poi_coords
+                last_coords = coords[last_raw]
+                distance_sq = ((last_coords.unsqueeze(1) - coords.unsqueeze(0)) ** 2).sum(dim=-1)
+                spatial_prior = torch.exp(-distance_sq / max(self.spatial_prior_temperature, 1e-6))
+                adjusted = adjusted + self.spatial_prior_weight * spatial_prior
 
         if self.history_repeat_prior_weight > 0:
             repeat_scores = torch.zeros_like(adjusted)
@@ -731,12 +939,6 @@ class POIRecommendationModel(nn.Module):
                 prior_scores[row_idx, dst.to(adjusted.device)] = values.to(adjusted.device)
             adjusted = adjusted + self.co_visit_prior_weight * prior_scores
 
-        if self.category_transition_prior_weight > 0:
-            last_category = self.poi_category[last_raw]
-            candidate_category = self.poi_category
-            category_scores = self.category_transition_prior_matrix[last_category][:, candidate_category]
-            adjusted = adjusted + self.category_transition_prior_weight * category_scores
-
         if self.user_poi_prior_weight > 0:
             prior_scores = torch.zeros_like(adjusted)
             for row_idx, user in enumerate(batch["user_idx"].detach().cpu().tolist()):
@@ -747,15 +949,9 @@ class POIRecommendationModel(nn.Module):
                 prior_scores[row_idx, poi.to(adjusted.device)] = values.to(adjusted.device)
             adjusted = adjusted + self.user_poi_prior_weight * prior_scores
 
-        if self.user_category_prior_weight > 0:
-            candidate_category = self.poi_category
-            category_scores = self.user_category_prior_matrix[batch["user_idx"]][:, candidate_category]
-            adjusted = adjusted + self.user_category_prior_weight * category_scores
-
-        if self.spatial_prior_weight > 0:
-            coords = self.spatial.poi_coords
-            last_coords = coords[last_raw]
-            distance_sq = ((last_coords.unsqueeze(1) - coords.unsqueeze(0)) ** 2).sum(dim=-1)
-            spatial_prior = torch.exp(-distance_sq / max(self.spatial_prior_temperature, 1e-6))
-            adjusted = adjusted + self.spatial_prior_weight * spatial_prior
+        # Dense priors (category_transition, user_category, spatial) are handled above:
+        # - PriorEncoder path: learned non-linear combination
+        # - Else path: individual weighted sum
+        # Both paths already accounted for these 3 dense priors, so we skip them here
+        # to avoid double-counting.
         return adjusted

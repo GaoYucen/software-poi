@@ -6,6 +6,7 @@ from typing import Any
 import torch
 from torch.utils.data import DataLoader
 
+from poi_rec.data.candidates import DynamicCandidateGenerator
 from poi_rec.data.dataset import POISequenceDataset, load_processed_arrays
 from poi_rec.models.poi_model import POIRecommendationModel
 from poi_rec.training.checkpoint import load_checkpoint
@@ -29,7 +30,12 @@ def evaluate_checkpoint(
     arrays = load_processed_arrays(config["processed_dir"])
     arrays = {key: value.to(device) for key, value in arrays.items()}
     model = POIRecommendationModel(metadata, arrays, config).to(device)
-    model.load_state_dict(checkpoint["model_state"])
+    missing_keys, _ = model.load_state_dict(checkpoint["model_state"], strict=False)
+    if missing_keys:
+        print(f"Note: {len(missing_keys)} missing keys in checkpoint (new modules initialized from scratch): {missing_keys[:5]}...")
+    candidate_generator = None
+    if bool(dict(config.get("dynamic_candidates", {})).get("enabled", False)):
+        candidate_generator = DynamicCandidateGenerator(config["processed_dir"], arrays, config)
     dataset = POISequenceDataset(
         config["processed_dir"],
         split,
@@ -50,4 +56,4 @@ def evaluate_checkpoint(
             metrics[f"Recall@{k}"] = 0.0
             metrics[f"NDCG@{k}"] = 0.0
         return metrics
-    return evaluate_model(model, loader, device, metrics_k)
+    return evaluate_model(model, loader, device, metrics_k, candidate_generator=candidate_generator)

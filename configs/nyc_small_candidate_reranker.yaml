@@ -1,0 +1,114 @@
+city: NYC
+raw_path: data/dataset_TSMC2014_NYC.txt
+processed_dir: processed/NYC
+run_dir: runs/nyc_small_candidate_reranker
+
+max_seq_len: 20
+min_user_checkins: 2
+val_ratio: 0.1
+test_ratio: 0.1
+batch_size: 256
+num_workers: 0
+candidate_protocol: closed_world
+
+# --- Model Dimensions ---
+hidden_dim: 128
+node2vec_dim: 128
+node2vec_walk_length: 20
+node2vec_num_walks: 10
+node2vec_p: 1.0
+node2vec_q: 1.0
+
+# --- Semantic Encoder ---
+semantic_encoder: hf_transformer
+text_embedding_dim: 384
+text_model_name: sentence-transformers/all-MiniLM-L6-v2
+use_user_id_embedding: true
+
+# --- GPT Backbone ---
+gpt_model_name: gpt2
+use_pretrained_gpt: true
+fallback_to_random_gpt: false
+gpt_freeze_policy: pathllm_selective
+gpt_layers: 2
+gpt_heads: 4
+dropout: 0.1
+
+# --- Matching / reranking ---
+matching_normalize: true
+initial_logit_scale: 14.285714
+neural_score_weight: 1.0
+collaborative_score_weight: 0.0
+use_prior_encoder: false
+use_candidate_reranker: true
+candidate_reranker_hidden_dim: 32
+candidate_reranker_weight: 1.0
+
+# Train on sampled hard candidates so the reranker learns candidate-inner ranking.
+sampled_cf:
+  enabled: true
+  num_candidates: 512
+  include_priors: true
+  hard_history_width: 20
+  hard_user_poi_top: 96
+  hard_transition_top: 128
+  hard_history_transition_top: 32
+  hard_popularity_top: 128
+
+# --- Dynamic candidate constraint for validation/evaluation ---
+dynamic_candidates:
+  enabled: true
+  num_candidates: 500
+  transition_top: 160
+  history_transition_top: 64
+  user_history_top: 128
+  spatial_top: 96
+  temporal_top: 96
+  popularity_top: 128
+  # false reports realistic target coverage; override to true for oracle reranking upper bound.
+  include_target: false
+
+# --- Statistical priors used as reranker/base features ---
+transition_prior_weight: 8.0
+transition_prior_mode: prob
+history_transition_prior_weight: 4.0
+history_transition_decay: 0.8
+history_transition_aggregation: max
+user_poi_prior_weight: 4.0
+user_poi_prior_mode: log_count
+co_visit_prior_weight: 0.5
+co_visit_prior_mode: log_count
+co_visit_max_user_pois: 100
+category_transition_prior_weight: 2.0
+category_transition_prior_mode: prob
+user_category_prior_weight: 2.0
+user_category_prior_mode: log_count
+history_repeat_prior_weight: 2.0
+history_repeat_decay: 0.7
+history_repeat_aggregation: max
+popularity_prior_weight: 1.0
+spatial_prior_weight: 1.0
+spatial_prior_temperature: 0.05
+
+# --- Training ---
+lr: 0.0005
+weight_decay: 0.01
+epochs: 1
+align_loss_weight: 0.0
+alignment_checkpoint: runs/nyc_p0_optim/alignment_pretrain.pt
+reuse_alignment_checkpoint: true
+gradient_clip: 1.0
+device: auto
+seed: 42
+skip_val_during_training: false
+eval_every_epochs: 1
+
+amp: true
+amp_dtype: bf16
+allow_tf32: true
+cudnn_benchmark: true
+float32_matmul_precision: high
+
+metrics_k: [5, 10, 20]
+monitor_metric: "NDCG@10"
+monitor_mode: max

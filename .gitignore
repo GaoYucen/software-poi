@@ -2,6 +2,10 @@
 __pycache__/
 *.py[cod]
 .pytest_cache/
+*.log
+*_output.log
+nohup*.out
+*.pid
 
 # Local data and generated artifacts
 data/*.txt
@@ -36,6 +40,9 @@ latex/*.synctex.gz
 processed/debug*/
 runs/debug*/
 runs/*_local/
+runs/nyc_optim*/
+runs/nyc_p0_optim/
+runs/nyc_small_candidate_reranker*/
 
 # Python packaging/build metadata
 *.egg-info/

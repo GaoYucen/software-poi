@@ -9,13 +9,14 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from poi_rec.training.evaluate import evaluate_checkpoint
-from poi_rec.utils.config import apply_config_overrides
+from poi_rec.utils.config import apply_config_overrides, load_config
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True, help="Checkpoint path produced by train.py.")
     parser.add_argument("--split", default="test", choices=["train", "val", "test"])
+    parser.add_argument("--config", help="Optional YAML config whose values override the checkpoint config for evaluation.")
     parser.add_argument(
         "--override",
         action="append",
@@ -27,7 +28,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    metrics = evaluate_checkpoint(args.checkpoint, split=args.split, config_overrides=apply_config_overrides({}, args.override))
+    overrides = load_config(args.config) if args.config else {}
+    overrides = apply_config_overrides(overrides, args.override)
+    metrics = evaluate_checkpoint(args.checkpoint, split=args.split, config_overrides=overrides)
     for key, value in metrics.items():
         print(f"{key}: {value:.6f}")
 
