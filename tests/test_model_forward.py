@@ -76,6 +76,28 @@ class ModelForwardTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 POIRecommendationModel(load_metadata(out), load_processed_arrays(out), bad_config)
 
+            for key in (
+                "use_topology_modality",
+                "use_semantic_modality",
+                "use_spatial_modality",
+                "use_temporal_modality",
+            ):
+                ablation_config = dict(config)
+                ablation_config[key] = False
+                ablation_model = POIRecommendationModel(load_metadata(out), load_processed_arrays(out), ablation_config)
+                self.assertEqual(ablation_model(batch)["scores"].shape, torch.Size([1, 3]))
+
+            for fusion_mode in ("context_gate", "concat", "fixed_mean"):
+                fusion_config = dict(config)
+                fusion_config["fusion_mode"] = fusion_mode
+                fusion_model = POIRecommendationModel(load_metadata(out), load_processed_arrays(out), fusion_config)
+                self.assertEqual(fusion_model(batch)["scores"].shape, torch.Size([1, 3]))
+
+            identity_config = dict(config)
+            identity_config["alignment_mode"] = "identity"
+            identity_model = POIRecommendationModel(load_metadata(out), load_processed_arrays(out), identity_config)
+            self.assertEqual(identity_model(batch)["scores"].shape, torch.Size([1, 3]))
+
     def test_padding_last_state(self) -> None:
         hidden = torch.tensor([[[1.0], [2.0], [3.0]], [[4.0], [5.0], [6.0]]])
         mask = torch.tensor([[1, 0, 0], [1, 1, 0]])

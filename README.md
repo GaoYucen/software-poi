@@ -1,219 +1,353 @@
-# 基于多模态数据融合的下一兴趣点推荐
+# 面向下一兴趣点推荐的跨模态自适应融合与检索（CAFR）
 
-本仓库提供论文《基于多模态数据融合的下一兴趣点推荐方法》的核心实验代码。任务目标是根据用户历史签到序列预测下一次访问的 POI（Point-of-Interest）。当前实现面向 TSMC2014/Foursquare 签到数据，主实验使用 NYC 数据集，并采用时间顺序切分、训练集构图和闭世界全排序评估协议，避免行为统计信息泄漏。
+本仓库是论文《面向下一兴趣点推荐的跨模态自适应融合与检索方法》的实验与论文工程代码，聚焦 **Next POI Recommendation** 任务：根据用户历史签到轨迹，结合兴趣点的**语义、拓扑、空间及时序上下文**，预测用户下一次最可能访问的兴趣点。
 
-代码实现了一个 Path-LLM 风格的多模态 POI 表示学习框架：从签到日志和 POI 元数据构建拓扑、语义、空间、时间等模态，通过 SemAlign 做拓扑—语义对齐，通过 ContextFusion 做上下文感知融合，最后使用选择性微调的 GPT-2 骨干网络完成序列建模和下一 POI 匹配。
+当前仓库中的最新论文版本已将方法统一为 **CAFR（Cross-modal Adaptive Fusion and Retrieval）** 框架。相较于早期 README 中描述的 Path-LLM / GPT-2 / 静态先验融合方案，当前版本更强调：
+
+- **多模态表示学习与跨模态对齐**
+- **用户画像与上下文感知的自适应融合**
+- **代价感知的自适应级联多索引检索**
+- **用户画像条件化的时空序列建模**
+- **候选重排序与联合优化**
+
+论文源码位于 `latex/paper.tex`，方法细化说明位于 `latex/参考材料/POI推荐完整方法思路与公式.md`。
+
+---
 
 ## 目录
 
-- [1. 仓库内容与 GitHub 上传说明](#1-仓库内容与-github-上传说明)
-- [2. 模型结构](#2-模型结构)
-- [3. 数据集与实验协议](#3-数据集与实验协议)
-- [4. 环境安装](#4-环境安装)
-- [5. 快速运行](#5-快速运行)
-- [6. 配置文件说明](#6-配置文件说明)
-- [7. 当前性能结果](#7-当前性能结果)
-- [8. 进阶优化模块](#8-进阶优化模块)
-- [9. 参考文件](#9-参考文件)
+- [1. 项目概述](#1-项目概述)
+- [2. 方法框架](#2-方法框架)
+- [3. 数据集与论文实验设置](#3-数据集与论文实验设置)
+- [4. 当前论文实验结果](#4-当前论文实验结果)
+- [5. 仓库结构](#5-仓库结构)
+- [6. 环境安装](#6-环境安装)
+- [7. 快速运行](#7-快速运行)
+- [8. 关键配置与脚本](#8-关键配置与脚本)
+- [9. 与论文内容对应关系](#9-与论文内容对应关系)
 
-## 1. 仓库内容与 GitHub 上传说明
+---
 
-### 1.1 程序运行必要文件
+## 1. 项目概述
 
-建议上传并保留以下文件/目录，clone 后即可复现预处理、训练、评估和测试流程：
+### 1.1 任务定义
 
-| 路径 | 作用 | 是否必要 |
-| --- | --- | --- |
-| `poi_rec/` | 数据处理、模型、损失、训练和评估核心代码 | 必要 |
-| `scripts/` | 命令行入口：预处理、预训练、训练、评估、Reranker 训练 | 必要 |
-| `configs/` | Debug、NYC 主实验、统计先验、动态候选等配置 | 必要 |
-| `tests/` | 单元测试 | 建议保留 |
-| `pyproject.toml` | Python 包和依赖声明 | 必要 |
-| `README.md` | 项目说明和运行命令 | 必要 |
-| `protocol.md` | 数据切分和无泄漏实验协议 | 必要 |
-| `data/dataset_TSMC2014_NYC.txt` | NYC 原始签到数据 | 复现实验必要 |
-| `data/dataset_TSMC2014_TKY.txt` | TKY 原始签到数据 | 跨城市实验可选 |
-| `processed/NYC/` | 已处理 NYC 数据，可跳过预处理直接训练/评估 | 建议保留 |
-| `runs/nyc_mvp/` | 主实验 baseline checkpoint，可直接评估 | 建议保留 |
-| `latex/paper.tex`、`latex/paper.pdf`、`latex/figure/` | 论文源码、PDF 和图片 | 论文归档需要时保留 |
+给定用户历史签到轨迹
 
-### 1.2 不建议上传的本地产物
+\[
+\mathcal{H}_u^{(n)}=[x_1^u,x_2^u,\ldots,x_n^u],
+\]
 
-以下文件通常不是程序运行必要文件，建议忽略或不提交：
+以及与城市轨迹相关的多模态信息：
 
-- Python 缓存：`__pycache__/`、`*.pyc`
-- 本地调试数据：`processed/debug*/`
-- 本地训练日志和临时实验：`runs/debug*/`、`runs/*_local/`、`runs/nyc_4090*/`、`runs/*benchmark*/`
-- 优化实验产生的大 checkpoint 和日志：`runs/nyc_optim*/`、`runs/nyc_p0_optim/`、`runs/nyc_small_candidate_reranker*/`
-- 训练状态文件：`*.pid`
-- 日志文件：`*.log`、`*_output.log`、`nohup*.out`
-- LaTeX 编译中间文件：`latex/*.aux`、`latex/*.bbl`、`latex/*.bcf`、`latex/*.blg`、`latex/*.fdb_latexmk`、`latex/*.fls`、`latex/*.log`、`latex/*.run.xml`、`latex/*.xdv`
+- `语义信息`：POI 类别、文本描述等
+- `拓扑信息`：用户历史转移构建的 POI 转移图
+- `空间信息`：POI 经纬度与相对位置关系
+- `行为上下文`：时间槽、轨迹状态、用户偏好画像
 
-### 1.3 Git LFS
+模型目标是学习评分函数，对候选兴趣点进行排序并输出 Top-K 推荐结果。
 
-仓库中包含原始数据、处理后数据和 baseline checkpoint 等大文件，建议使用 Git LFS 管理。首次 clone 后执行：
+### 1.2 当前方法主线
 
-```bash
-git lfs install
-git lfs pull
-```
+根据最新论文内容，CAFR 不再是“语言模型骨干 + 手工统计先验”的简单组合，而是一个围绕 **表示—融合—检索—排序** 构建的完整框架：
 
-当前 `.gitattributes` 已将以下关键大文件纳入 LFS：
+1. 对 POI 的语义、拓扑、空间信息进行统一编码；
+2. 通过跨模态交互与一致性约束增强不同模态间的信息传递与对齐；
+3. 利用用户画像和上下文，动态决定不同模态对当前用户/候选的贡献；
+4. 通过代价感知级联检索，优先访问低代价候选源，仅在必要时访问高代价索引；
+5. 对动态候选池执行时空序列建模和神经重排序。
 
-- `data/dataset_TSMC2014_NYC.txt`
-- `data/dataset_TSMC2014_TKY.txt`
-- `processed/NYC/arrays.npz`
-- `processed/NYC/train.json`
-- `processed/NYC/val.json`
-- `processed/NYC/test.json`
-- `runs/nyc_mvp/best.pt`
-- `runs/nyc_mvp/alignment_pretrain.pt`
+### 1.3 本仓库包含的内容
 
-如需额外上传新的 checkpoint，例如 `runs/nyc_p0_optim/best.pt`，应先加入 Git LFS，再提交。
+本仓库同时包含：
 
-## 2. 模型结构
+- `poi_rec/`：核心数据处理、模型、损失、训练与评估代码
+- `configs/`：调试、论文实验、候选检索等配置文件
+- `scripts/`：预处理、训练、评估、结果汇总脚本
+- `latex/`：论文源码、图表与补充材料
+- `processed/`：已处理好的数据样例
+- `tests/`：基础测试用例
 
-整体流程如下：
+---
+
+## 2. 方法框架
+
+### 2.1 总体流程
 
 ```text
 原始签到序列 / POI 元数据
         │
-        ├── 拓扑模态：训练集 POI 转移图 + 转移统计 + Node2Vec
-        ├── 语义模态：POI 文本描述 + 类别嵌入 + Transformer 文本嵌入
-        ├── 空间模态：归一化 GPS 坐标
-        └── 时间模态：本地小时、星期、签到间隔桶
+        ├── 语义模态：类别嵌入 + 文本特征
+        ├── 拓扑模态：转移统计 + Node2Vec
+        ├── 空间模态：归一化经纬度
         │
         ▼
-SemAlign：拓扑—语义跨模态对齐
+多模态表示学习与跨模态交互
         │
         ▼
-ContextFusion：上下文感知动态门控融合
+跨模态一致性约束（InfoNCE 对齐损失）
         │
         ▼
-选择性微调 GPT-2 序列骨干
+用户画像编码 + 上下文感知自适应融合
         │
         ▼
-查询向量—候选 POI 向量归一化匹配
+代价感知的自适应级联多索引检索
         │
         ▼
-下一 POI 全排序预测
+用户画像条件化的时空序列建模
+        │
+        ▼
+候选重排序与 Top-K 下一兴趣点推荐
 ```
 
-核心实现文件：
+### 2.2 五个核心模块
 
-- `poi_rec/models/poi_model.py`：总模型、候选打分、统计先验融合
-- `poi_rec/models/encoders.py`：拓扑、语义、空间、时间和用户画像编码器
-- `poi_rec/models/alignment.py`：SemAlign 投影头
-- `poi_rec/models/fusion.py`：ContextFusion / DynamicFusion
-- `poi_rec/models/gpt_backbone.py`：GPT-2 序列骨干
-- `poi_rec/models/priors.py`：PriorEncoder 和 CandidateReranker
-- `poi_rec/data/candidates.py`：动态候选生成器
+#### （1）多模态表示学习与跨模态对齐
 
-### 2.1 多模态编码器
+对每个兴趣点分别构建：
 
-| 模态 | 输入来源 | 实现方式 |
-| --- | --- | --- |
-| 拓扑模态 | 训练集相邻签到诱导的有向加权 POI 转移图 | 转移统计特征 + Node2Vec 嵌入，经线性投影和 LayerNorm 得到拓扑表示 |
-| 语义模态 | POI 类别、城市和文本描述 | `sentence-transformers/all-MiniLM-L6-v2` 生成文本嵌入，叠加可学习类别嵌入 |
-| 空间模态 | POI 经纬度 | 坐标归一化后经 MLP/GELU/LayerNorm 投影到隐藏空间 |
-| 时间模态 | 签到时间上下文 | 本地小时、星期、时间间隔 bucket 分别嵌入后求和并归一化 |
-| 用户/画像信息 | 训练集用户类别偏好统计、用户 ID | 用户 ID embedding 与用户类别画像投影作为辅助上下文 |
+- **语义表示**：类别嵌入 + 文本特征投影
+- **拓扑表示**：转移统计特征 + Node2Vec 表示
+- **空间表示**：归一化经纬度经 MLP 映射
 
-所有行为统计类特征均只由训练集构建，包括转移图、Node2Vec、流行度、用户-POI 偏好和用户-类别偏好。
+随后通过跨模态交互模块在三种表示之间进行信息传递，并通过 InfoNCE 风格的对齐损失约束同一 POI 在不同模态空间中的表示接近。
 
-### 2.2 SemAlign 与 ContextFusion
+#### （2）用户画像编码与上下文感知自适应融合
 
-SemAlign 通过 `topology_projection` 和 `semantic_projection` 两个投影头对齐拓扑表示与语义表示，训练时结合实例级和特征级 InfoNCE 损失。
+用户画像由以下信息组成：
 
-ContextFusion 根据当前序列上下文动态生成门控向量，而不是简单拼接或固定加权：
+- 类别偏好分布
+- 时间偏好分布
+- 空间活动中心与离散程度
+- 历史访问 POI 分布
+
+在此基础上，模型生成 **用户—候选粒度** 的模态权重，对语义、拓扑、空间表示进行动态加权融合，而不是采用固定权重。
+
+#### （3）代价感知的自适应级联多索引检索
+
+候选生成分为两个阶段：
+
+- **Stage 1：低代价检索源**
+  - history
+  - user
+  - transition
+  - category
+  - temporal
+  - popularity
+
+- **Stage 2：高代价检索源**
+  - spatial
+  - history_transition
+  - trajectory_neighbor
+
+模型根据第一阶段候选数量和分数熵判断是否需要访问第二阶段索引，从而在 **候选覆盖率** 与 **在线检索效率** 之间取得平衡。
+
+#### （4）用户画像条件化的时空序列建模
+
+在得到历史轨迹上各个 POI 的融合表示后，模型继续加入：
+
+- 历史签到相对末次位置的空间关系编码
+- 历史签到时间槽编码
+- 目标时间槽与时间间隔编码
+
+同时将用户画像作为条件前缀输入因果序列编码器，以获得用户当前时刻的动态查询表示。
+
+#### （5）候选重排序与联合优化
+
+在动态候选池内部，模型对每个候选构建：
+
+- 候选融合表示
+- 神经匹配分数
+- 候选上下文特征分数
+
+最终损失由：
+
+- 排序损失 `L_rank`
+- 跨模态对齐损失 `L_align`
+
+联合组成：
+
+\[
+\mathcal{L}=\mathcal{L}_{rank}+\lambda_{align}\mathcal{L}_{align}
+\]
+
+---
+
+## 3. 数据集与论文实验设置
+
+### 3.1 数据集来源
+
+论文当前使用两个真实城市签到数据集：
+
+- **NYC**：纽约市签到数据
+- **TKY**：东京签到数据
+
+二者均来源于 Foursquare 公开签到数据，可用于下一兴趣点推荐任务。
+
+### 3.2 论文中采用的整理后统计
+
+根据 `latex/paper.tex` 当前版本，论文中的数据集统计如下：
+
+| 数据集 | 用户数量 | POI 数量 | 训练样本数量 | 测试样本数量 |
+| --- | ---: | ---: | ---: | ---: |
+| NYC | 1,072 | 5,118 | 114,321 | 1,071 |
+| TKY | 2,284 | 7,861 | 376,448 | 2,284 |
+
+> 说明：这组数字是论文写作口径下的整理统计；与 `processed/` 中某些历史预处理产物的统计口径可能不完全一致。若以论文撰写为准，请优先参考 `latex/paper.tex`。
+
+### 3.3 论文实验实现设置
+
+当前论文实验描述中使用的关键设置包括：
+
+- 框架：PyTorch
+- 优化器：AdamW
+- 学习率：`3e-4`
+- 权重衰减：`1e-2`
+- batch size：`256`
+- dropout：`0.1`
+- 隐空间维度：`128`
+- 序列编码器：2 层 Transformer Encoder，4 个注意力头
+- 最大历史长度：`30`
+- 候选池大小：`256`
+- Node2Vec 维度：`64`
+- 文本语义特征：TF-IDF + Truncated SVD，64 维
+- 对齐损失权重：`0.01`
+
+### 3.4 评价指标
+
+论文中主要采用：
+
+- `HR@10`
+- `NDCG@10`
+- `MRR`
+
+同时，在候选池构建分析中额外关注：
+
+- Recall@N
+- 平均检索延迟
+- 高代价候选源调用率
+- QPS
+
+---
+
+## 4. 当前论文实验结果
+
+### 4.1 与代表性方法整体比较
+
+根据 `latex/paper.tex` 当前表格，模型在 NYC / TKY 上的核心结果如下：
+
+| Method | NYC HR@10 | NYC NDCG@10 | NYC MRR | TKY HR@10 | TKY NDCG@10 | TKY MRR |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| SASRec | 0.4828 | 0.3126 | 0.2701 | 0.4325 | 0.2837 | 0.2470 |
+| BERT4Rec | 0.4670 | 0.3094 | 0.2711 | 0.4347 | 0.2908 | 0.2539 |
+| DuoRec | 0.4069 | 0.2634 | 0.2276 | 0.3119 | 0.2089 | 0.1867 |
+| TiCoSeRec | 0.4808 | 0.3204 | 0.2754 | 0.3704 | 0.2421 | 0.2151 |
+| CrossDR | 0.4720 | 0.3259 | 0.2866 | 0.4057 | 0.2619 | 0.2265 |
+| MAERec | 0.4453 | 0.2985 | 0.2610 | 0.4066 | 0.2614 | 0.2305 |
+| GETNext | 0.5130 | 0.3513 | 0.3097 | 0.4850 | 0.3321 | 0.2921 |
+| POIGDE | 0.3836 | 0.2797 | 0.2540 | 0.3182 | 0.2357 | 0.2180 |
+| DiffuRec | 0.4079 | 0.3023 | 0.2774 | 0.3989 | 0.2870 | 0.2594 |
+| LLM4POI | 0.4666 | 0.3816 | **0.3590** | 0.3948 | 0.2822 | 0.2972 |
+| **Ours (CAFR)** | **0.5257** | **0.3828** | 0.3442 | **0.5346** | **0.3574** | **0.3110** |
+
+从论文当前结果看，CAFR 在两个真实城市数据集上都取得了较强的命中能力和排序质量，尤其在 `HR@10` 和 `NDCG@10` 上表现突出。
+
+### 4.2 代价感知候选池构建的效率收益
+
+论文还专门分析了 CAFR 的工程收益：
+
+- 与固定访问全部高代价候选源的方法相比，CAFR 在候选召回仅轻微下降的前提下，显著降低平均检索延迟；
+- 高代价候选源调用率由 `100%` 降至 `68.25%`；
+- QPS 从 `287.96` 提升到 `341.55`；
+- 最终推荐质量保持基本稳定。
+
+这部分结果对应论文中的“代价感知候选池构建分析”章节与图 `latex/figure/nyc_cost_aware_candidate_pool.pdf`。
+
+---
+
+## 5. 仓库结构
 
 ```text
-gate = sigmoid(MLP([topology, semantic, temporal, user, profile]))
-static = gate * topology + (1 - gate) * semantic
-token = MLP([static, spatial, temporal, user, profile])
+software-poi/
+├── README.md
+├── protocol.md
+├── pyproject.toml
+├── configs/
+│   ├── debug.yaml
+│   ├── paper_nyc.yaml
+│   ├── paper_tky.yaml
+│   └── ...
+├── data/
+├── processed/
+├── poi_rec/
+│   ├── data/
+│   │   ├── candidates.py
+│   │   ├── dataset.py
+│   │   └── preprocess.py
+│   ├── losses/
+│   │   ├── alignment_loss.py
+│   │   └── recommendation_loss.py
+│   ├── models/
+│   │   ├── alignment.py
+│   │   ├── encoders.py
+│   │   ├── fusion.py
+│   │   ├── poi_model.py
+│   │   └── priors.py
+│   ├── training/
+│   └── utils/
+├── scripts/
+│   ├── preprocess.py
+│   ├── pretrain_alignment.py
+│   ├── train.py
+│   ├── evaluate.py
+│   └── summarize_paper_results.py
+├── tests/
+└── latex/
+    ├── paper.tex
+    ├── references.bib
+    ├── figure/
+    └── 参考材料/
 ```
 
-### 2.3 GPT-2 序列建模与候选匹配
+### 5.1 核心代码文件
 
-融合后的 token 序列输入 GPT-2 骨干网络。主实验配置使用：
+| 文件 | 作用 |
+| --- | --- |
+| `poi_rec/models/encoders.py` | 语义、拓扑、空间、时间、画像等编码器 |
+| `poi_rec/models/fusion.py` | 跨模态交互与自适应融合相关模块 |
+| `poi_rec/models/alignment.py` | 跨模态对齐投影/对齐逻辑 |
+| `poi_rec/models/poi_model.py` | 总模型与候选打分主逻辑 |
+| `poi_rec/data/candidates.py` | 多源候选生成与动态候选池构建 |
+| `poi_rec/losses/alignment_loss.py` | 对齐损失 |
+| `poi_rec/losses/recommendation_loss.py` | 推荐排序损失 |
+| `scripts/train.py` | 主训练入口 |
+| `scripts/evaluate.py` | 评估入口 |
 
-- `gpt_model_name: gpt2`
-- `hidden_dim: 128`
-- `gpt_layers: 2`
-- `gpt_heads: 4`
-- `max_seq_len: 20`
-- `gpt_freeze_policy: pathllm_selective`
+---
 
-推理时取最后一个有效位置的隐藏状态作为查询向量，与候选 POI 表示做归一化点积匹配。主实验使用 `closed_world` 协议，即候选和评估目标限制在训练集中出现过的 POI。
+## 6. 环境安装
 
-## 3. 数据集与实验协议
-
-### 3.1 数据来源
-
-数据来自 TSMC2014/Foursquare 签到数据，原始字段包括用户 ID、POI/venue ID、类别 ID 与类别名称、纬度、经度、时区偏移和 UTC 签到时间。
-
-当前仓库主要包含 NYC 数据配置：
-
-- 原始文件：`data/dataset_TSMC2014_NYC.txt`
-- 处理后目录：`processed/NYC`
-- 主实验配置：`configs/nyc_mvp.yaml`
-
-### 3.2 预处理与切分协议
-
-预处理遵循 `protocol.md`：
-
-1. 按用户对签到记录进行 UTC 时间排序；
-2. 使用时区偏移计算本地小时和星期；
-3. 过滤签到次数少于 2 的用户；
-4. 按用户时间顺序切分训练/验证/测试集：80% / 10% / 10%；
-5. 每个目标位置构造一个下一 POI 样本，历史长度最多为 `max_seq_len=20`；
-6. 所有拓扑、流行度和用户偏好统计仅由训练前缀生成；
-7. 主实验采用闭世界全排序，只评估训练集中出现过的 POI 目标。
-
-### 3.3 当前处理后 NYC 数据统计
-
-根据 `processed/NYC/metadata.json`：
-
-| 项目 | 数值 |
-| --- | ---: |
-| 用户数 | 1,083 |
-| POI 数 | 38,333 |
-| 类别数 | 400 |
-| 训练样本数 | 180,873 |
-| 验证样本数 | 22,736 |
-| 测试样本数 | 22,736 |
-| 训练集可见 POI | 34,172 |
-| 转移边数 | 133,305 |
-| 训练相邻转移次数 | 180,873 |
-
-论文正文中的数据统计表使用了另一个整理口径。当前 README 以代码目录中最新 `processed/NYC/metadata.json` 为准。
-
-## 4. 环境安装
-
-建议使用 Python 3.11。当前远程服务器可直接使用 `py11` 环境：
+建议使用 Python 3.11。当前远程环境推荐直接使用 `py11` 解释器：
 
 ```bash
 /opt/conda/envs/py11/bin/python -m pip install -e .
 ```
 
-如果不使用 editable install，也可以安装主要依赖：
+如果仅手动安装依赖，可使用：
 
 ```bash
 /opt/conda/envs/py11/bin/python -m pip install torch transformers pandas numpy scikit-learn networkx node2vec gensim pyyaml tqdm safetensors tokenizers
 ```
 
-正式 NYC 配置需要能够加载以下 HuggingFace 模型：
+若实验配置依赖 HuggingFace 模型，请确保运行环境能访问或提前缓存对应模型文件。
 
-- `gpt2`
-- `sentence-transformers/all-MiniLM-L6-v2`
+---
 
-如果运行环境无法联网下载模型，需要提前缓存到本地。`fallback_to_random_gpt: true` 只建议用于 debug 或 smoke test，不建议用于正式实验。
+## 7. 快速运行
 
-## 5. 快速运行
+以下命令均默认使用：`/opt/conda/envs/py11/bin/python`
 
-以下命令均使用项目约定的 Python 解释器：`/opt/conda/envs/py11/bin/python`。
-
-### 5.1 Debug Smoke Test
+### 7.1 Debug / Smoke Test
 
 ```bash
 /opt/conda/envs/py11/bin/python scripts/preprocess.py --config configs/debug.yaml
@@ -222,177 +356,79 @@ token = MLP([static, spatial, temporal, user, profile])
 /opt/conda/envs/py11/bin/python scripts/evaluate.py --checkpoint runs/debug/best.pt --split val
 ```
 
-### 5.2 NYC 主实验
+### 7.2 论文配置示例
 
-如果 `processed/NYC/` 已存在，可跳过第一步预处理。
-
-```bash
-/opt/conda/envs/py11/bin/python scripts/preprocess.py --config configs/nyc_mvp.yaml
-/opt/conda/envs/py11/bin/python scripts/pretrain_alignment.py --config configs/nyc_mvp.yaml
-/opt/conda/envs/py11/bin/python scripts/train.py --config configs/nyc_mvp.yaml
-/opt/conda/envs/py11/bin/python scripts/evaluate.py --checkpoint runs/nyc_mvp/best.pt --split test
-```
-
-### 5.3 直接评估已上传 baseline checkpoint
-
-如果已通过 Git LFS 拉取 `runs/nyc_mvp/best.pt`：
+如果使用论文主配置，可参考：
 
 ```bash
-/opt/conda/envs/py11/bin/python scripts/evaluate.py --checkpoint runs/nyc_mvp/best.pt --split test
+/opt/conda/envs/py11/bin/python scripts/preprocess.py --config configs/paper_nyc.yaml
+/opt/conda/envs/py11/bin/python scripts/pretrain_alignment.py --config configs/paper_nyc.yaml
+/opt/conda/envs/py11/bin/python scripts/train.py --config configs/paper_nyc.yaml
+/opt/conda/envs/py11/bin/python scripts/evaluate.py --checkpoint runs/paper_nyc/best.pt --split test
 ```
 
-### 5.4 统计先验 / P0 优化实验
+> 注意：不同阶段曾存在多套实验配置（如 `nyc_mvp.yaml`、`paper_nyc.yaml`、`paper_tky.yaml` 等）。若目标是复现当前论文文本，请优先以 `latex/paper.tex` 中描述的实验设置为准，并结合实际本地配置文件核对。
 
-手工统计先验配置：
-
-```bash
-/opt/conda/envs/py11/bin/python scripts/pretrain_alignment.py --config configs/nyc_4090.yaml
-/opt/conda/envs/py11/bin/python scripts/train.py --config configs/nyc_4090.yaml
-/opt/conda/envs/py11/bin/python scripts/evaluate.py --checkpoint runs/nyc_4090_epoch1/best.pt --split test
-```
-
-PriorEncoder 端到端先验配置：
-
-```bash
-/opt/conda/envs/py11/bin/python scripts/pretrain_alignment.py --config configs/nyc_p0_optim.yaml
-/opt/conda/envs/py11/bin/python scripts/train.py --config configs/nyc_p0_optim.yaml
-/opt/conda/envs/py11/bin/python scripts/evaluate.py --checkpoint runs/nyc_p0_optim/best.pt --split test
-```
-
-动态候选约束配置：
-
-```bash
-/opt/conda/envs/py11/bin/python scripts/evaluate.py --checkpoint runs/nyc_p0_optim/best.pt --split test --config configs/nyc_dynamic_candidates.yaml
-```
-
-### 5.5 单元测试
+### 7.3 运行测试
 
 ```bash
 /opt/conda/envs/py11/bin/python -m unittest discover -s tests
 ```
 
-## 6. 配置文件说明
+---
 
-| 配置 | 作用 |
+## 8. 关键配置与脚本
+
+### 8.1 常见配置文件
+
+| 配置文件 | 用途 |
 | --- | --- |
-| `configs/debug.yaml` | 小规模 debug / smoke test |
-| `configs/nyc_mvp.yaml` | NYC 主实验配置，纯神经多模态模型 |
-| `configs/nyc_4090.yaml` | RTX 4090 快速配置，评估期叠加手工统计先验 |
-| `configs/nyc_optim_priors.yaml` | 统计先验权重优化实验配置 |
-| `configs/nyc_p0_optim.yaml` | PriorEncoder 端到端先验学习配置 |
-| `configs/nyc_dynamic_candidates.yaml` | 动态候选约束评估配置 |
-| `configs/nyc_small_candidate_reranker.yaml` | 小候选集 CandidateReranker 实验配置 |
-| `configs/nyc_profile_llm.yaml` | 用户画像 / LLM 相关探索配置 |
+| `configs/debug.yaml` | 小规模调试 |
+| `configs/paper_nyc.yaml` | 论文 NYC 配置 |
+| `configs/paper_tky.yaml` | 论文 TKY 配置 |
+| `configs/nyc_dynamic_candidates.yaml` | 动态候选相关配置 |
+| `configs/nyc_p0_optim.yaml` | 先验/候选相关实验配置 |
 
-主配置 `configs/nyc_mvp.yaml` 的关键参数：
+### 8.2 常见脚本
 
-| 参数 | 数值 |
+| 脚本 | 功能 |
 | --- | --- |
-| `hidden_dim` | 128 |
-| `node2vec_dim` | 128 |
-| `batch_size` | 64 |
-| `epochs` | 5 |
-| `lr` | 0.0005 |
-| `weight_decay` | 0.01 |
-| `alignment_pretrain_epochs` | 1 |
-| `candidate_protocol` | `closed_world` |
-| `monitor_metric` | `NDCG@10` |
+| `scripts/preprocess.py` | 数据预处理 |
+| `scripts/pretrain_alignment.py` | 对齐预训练 |
+| `scripts/train.py` | 主训练 |
+| `scripts/evaluate.py` | 模型评估 |
+| `scripts/generate_experiment_figures.py` | 生成实验图 |
+| `scripts/summarize_paper_results.py` | 汇总论文结果 |
 
-## 7. 当前性能结果
+---
 
-### 7.1 主实验结果
+## 9. 与论文内容对应关系
 
-论文中报告的完整模型在 NYC 测试集上的主结果如下：
+如果你是从论文或 LaTeX 材料进入本仓库，建议按下面顺序阅读：
 
-| 指标 | 验证集 | 测试集 |
-| --- | ---: | ---: |
-| HR@5 | 31.14% | 30.70% |
-| NDCG@5 | 21.83% | 22.01% |
-| HR@10 | 39.05% | 37.66% |
-| NDCG@10 | 24.41% | 24.28% |
-| HR@20 | 45.36% | 43.34% |
-| MRR | 20.60% | 20.80% |
+1. **论文主文**：`latex/paper.tex`
+2. **方法公式与撰写说明**：`latex/参考材料/POI推荐完整方法思路与公式.md`
+3. **实验图表**：`latex/figure/`
+4. **核心实现**：`poi_rec/models/`、`poi_rec/data/`
+5. **训练评估入口**：`scripts/train.py`、`scripts/evaluate.py`
 
-训练过程中验证集最佳 epoch 为第 4 轮。验证集与测试集 NDCG@10 差距约 0.13 个百分点，说明当前无泄漏切分下泛化较稳定。
+### 9.1 当前 README 的定位
 
-### 7.2 与统计先验结合后的结果
+本 README 已根据最新论文内容更新，重点反映：
 
-| 方法 | HR@5 | HR@10 | NDCG@5 | NDCG@10 | MRR |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| 本文方法（纯神经，3 轮） | 30.59% | 38.40% | 21.36% | 23.90% | 20.18% |
-| 本文方法 + 统计先验（3 轮训练） | **38.57%** | **47.12%** | **27.91%** | **30.70%** | **26.37%** |
-| 本文方法 + 统计先验（1 轮训练） | 37.74% | 46.36% | 27.62% | 30.43% | 26.21% |
-| PriorEncoder（1 轮训练） | 37.72% | 47.07% | 27.11% | 30.15% | 25.68% |
-| PriorEncoder + 动态候选约束 | 37.75% | 47.18% | 27.12% | 30.19% | 25.84% |
+- 方法名称已统一为 **CAFR**；
+- 核心创新点已更新为 **跨模态交互 + 自适应融合 + 代价感知级联检索**；
+- 实验结果以 `latex/paper.tex` 当前版本为准；
+- 旧版 README 中对 Path-LLM、GPT-2 静态骨干、手工统计先验主导方案的描述不再作为本文档主线。
 
-统计先验显著提升召回和排序指标，说明 POI 推荐任务中流行度、转移、重复访问、用户偏好和空间邻近等统计信号与神经表示具有强互补性。
+### 9.2 补充说明
 
-## 8. 进阶优化模块
+由于仓库中保留了多个阶段的实验配置和历史实现，代码层面仍可能看到一些旧模块名、探索性配置或未完全清理的实验脚本。这是正常现象。若你的目标是：
 
-### 8.1 Statistical Priors
+- **复现当前论文写作内容**：优先看 `latex/paper.tex` 与 `latex/参考材料/POI推荐完整方法思路与公式.md`
+- **理解现有工程代码结构**：优先看 `poi_rec/` 与 `scripts/`
+- **继续扩展实验**：优先看 `configs/`、`scripts/` 与 `latex/results/`
 
-模型支持在神经匹配分数之外叠加统计先验：
+---
 
-| 先验 | 配置参数 |
-| --- | --- |
-| POI 全局流行度 | `popularity_prior_weight` |
-| 最近转移 | `transition_prior_weight` |
-| 历史多步转移 | `history_transition_prior_weight` |
-| 用户-POI 偏好 | `user_poi_prior_weight` |
-| 用户类别偏好 | `user_category_prior_weight` |
-| 类别转移 | `category_transition_prior_weight` |
-| 重复访问 | `history_repeat_prior_weight` |
-| 空间邻近 | `spatial_prior_weight` |
-| 共访偏好 | `co_visit_prior_weight` |
-
-最终分数：
-
-```text
-final_score = neural_score + Σ(weight_i * statistical_prior_i)
-```
-
-### 8.2 PriorEncoder
-
-`poi_rec/models/priors.py` 中的 `PriorEncoder` 可学习组合密集先验分数。在 `configs/nyc_p0_optim.yaml` 中启用：
-
-```yaml
-use_prior_encoder: true
-apply_priors_during_training: true
-```
-
-为避免大候选集下显存溢出，当前实现使用轻量单层 `Linear(4, 1, bias=False)` 组合 4 个密集先验：popularity、category_transition、user_category、spatial。其余稀疏先验仍采用原有加权逻辑。
-
-### 8.3 动态候选约束
-
-`poi_rec/data/candidates.py` 中的 `DynamicCandidateGenerator` 可在评估时将候选空间从训练可见 POI 收缩到固定规模候选集，例如 2,000 个候选。候选来源包括：
-
-- 最近 POI 转移 top-K
-- 历史多步转移 top-K
-- 用户训练历史 POI
-- 上一步 POI 的空间近邻
-- 小时/星期时间槽热门 POI
-- 全局热门 POI 补足
-
-配置见 `configs/nyc_dynamic_candidates.yaml`。
-
-### 8.4 CandidateReranker
-
-当前已实现小候选集精排的工程基础：
-
-- `poi_rec/models/priors.py`：`CandidateReranker`，10 维特征 MLP
-- `poi_rec/models/poi_model.py`：`scores_for_candidates()` 候选级接口
-- `scripts/train_reranker.py`：冻结 backbone 的独立 Reranker 训练脚本
-
-后续优化重点可从全空间神经匹配转向：高质量小候选召回 + 候选集内可学习精排 + 相似轨迹/用户意图/统计先验联合建模。
-
-## 9. 参考文件
-
-- 实验协议：`protocol.md`
-- 主实验配置：`configs/nyc_mvp.yaml`
-- Debug 配置：`configs/debug.yaml`
-- P0 优化配置：`configs/nyc_p0_optim.yaml`
-- 动态候选配置：`configs/nyc_dynamic_candidates.yaml`
-- 模型实现：`poi_rec/models/`
-- 数据处理：`poi_rec/data/`
-- 训练与评估入口：`scripts/train.py`、`scripts/evaluate.py`
-- 论文源码：`latex/paper.tex`
+如需进一步同步 README 与某个特定配置文件、训练脚本或最终投稿版本，我可以继续帮你做第二轮精修，例如补充“配置—论文章节—代码模块”的逐项映射表。

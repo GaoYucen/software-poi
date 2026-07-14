@@ -133,7 +133,18 @@ class POIRecommendationModel(nn.Module):
         self.user_embedding = nn.Embedding(self.num_users, hidden_dim) if self.use_user_id_embedding else None
         self.profile_encoder = ProfileEncoder(self.user_category_prior_matrix, hidden_dim)
         self.alignment = AlignmentModule(hidden_dim)
-        self.fusion = DynamicFusion(hidden_dim, float(config.get("dropout", 0.1)))
+        self.alignment_mode = str(config.get("alignment_mode", "projected"))
+        if self.alignment_mode not in {"projected", "identity"}:
+            raise ValueError("alignment_mode must be 'projected' or 'identity'.")
+        self.use_topology_modality = bool(config.get("use_topology_modality", True))
+        self.use_semantic_modality = bool(config.get("use_semantic_modality", True))
+        self.use_spatial_modality = bool(config.get("use_spatial_modality", True))
+        self.use_temporal_modality = bool(config.get("use_temporal_modality", True))
+        self.fusion = DynamicFusion(
+            hidden_dim,
+            float(config.get("dropout", 0.1)),
+            mode=str(config.get("fusion_mode", "context_gate")),
+        )
         self.backbone = GPTBackbone(
             hidden_dim=hidden_dim,
             model_name=str(config.get("gpt_model_name", "gpt2")),
@@ -418,8 +429,23 @@ class POIRecommendationModel(nn.Module):
         topology = self.topology(poi)
         semantic = self.semantic(poi)
         spatial = self.spatial(poi)
-        aligned_topology, aligned_semantic = self.alignment(topology, semantic)
+        if not self.use_topology_modality:
+            topology = torch.zeros_like(topology)
+        if not self.use_semantic_modality:
+            semantic = torch.zeros_like(semantic)
+        if self.alignment_mode == "projected":
+            aligned_topology, aligned_semantic = self.alignment(topology, semantic)
+        else:
+            aligned_topology, aligned_semantic = topology, semantic
+        if not self.use_topology_modality:
+            aligned_topology = torch.zeros_like(aligned_topology)
+        if not self.use_semantic_modality:
+            aligned_semantic = torch.zeros_like(aligned_semantic)
         temporal = self.temporal(batch["hour"], batch["weekday"], batch["delta_bucket"])
+        if not self.use_spatial_modality:
+            spatial = torch.zeros_like(spatial)
+        if not self.use_temporal_modality:
+            temporal = torch.zeros_like(temporal)
         profile = self.profile_encoder(batch["user_idx"], poi.shape[1])
         if self.user_embedding is None:
             user = torch.zeros_like(temporal)
@@ -435,7 +461,20 @@ class POIRecommendationModel(nn.Module):
         topology = self.topology.all_embeddings()
         semantic = self.semantic.all_embeddings()
         spatial = self.spatial.all_embeddings()
-        aligned_topology, aligned_semantic = self.alignment(topology, semantic)
+        if not self.use_topology_modality:
+            topology = torch.zeros_like(topology)
+        if not self.use_semantic_modality:
+            semantic = torch.zeros_like(semantic)
+        if not self.use_spatial_modality:
+            spatial = torch.zeros_like(spatial)
+        if self.alignment_mode == "projected":
+            aligned_topology, aligned_semantic = self.alignment(topology, semantic)
+        else:
+            aligned_topology, aligned_semantic = topology, semantic
+        if not self.use_topology_modality:
+            aligned_topology = torch.zeros_like(aligned_topology)
+        if not self.use_semantic_modality:
+            aligned_semantic = torch.zeros_like(aligned_semantic)
         static = torch.cat([aligned_topology, aligned_semantic, spatial], dim=-1)
         return self.candidate_projection(static)
 

@@ -65,7 +65,7 @@ def main() -> None:
         text_encoder=str(config.get("semantic_encoder", config.get("text_encoder", args.text_encoder))),
         text_embedding_dim=int(config.get("text_embedding_dim", args.text_embedding_dim)),
         text_model_name=config.get("text_model_name", args.text_model_name),
-        seed=int(config.get("seed", args.seed)),
+        seed=int(config.get("preprocess_seed", config.get("seed", args.seed))),
     )
     print("Preprocessing complete:")
     for key, value in summary.items():

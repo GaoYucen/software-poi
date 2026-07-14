@@ -22,11 +22,11 @@
   asymmetric,
   inner=1.45cm,
   outer=1.45cm,
-  top=0.6cm,
+  top=1.0cm,
   bottom=3cm,
   includehead,
   headheight=18pt,
-  headsep=18pt,
+  headsep=22pt,
   footskip=1.2cm
 }
 
@@ -109,11 +109,50 @@
 
 \newcommand{\rj@ifnotempty}[2]{\ifx#1\@empty\else#2\fi}
 \newcommand{\rj@frontpara}[2]{\noindent{#1 #2}\par}
+\newif\ifrj@fundplaced
+
+% Keep the funding acknowledgement at the bottom of page 1 without
+% changing the page geometry.  A footnote insertion reserves space only
+% on the current page, so an overlong English abstract can break naturally
+% onto page 2 and the main text follows it immediately.
+\newcommand{\rj@reservefirstpagefund}{%
+  \rj@ifnotempty{\@rjfund}{%
+    \global\rj@fundplacedtrue
+    \begingroup
+      \interfootnotelinepenalty=10000\relax
+      \def\@thefnmark{}%
+      \long\def\@makefntext##1{\noindent##1}%
+      \@footnotetext{%
+        \rjbibfont
+        \noindent\hspace*{1em}*\hspace{0.8em}基金项目: \@rjfund\par
+        \rj@ifnotempty{\@rjdates}{%
+          \noindent\hspace*{2em}\@rjdates\par
+        }%
+      }%
+    \endgroup
+  }%
+}
+
+% Use the short separator shown in the Journal of Software sample only on
+% the first page; ordinary footnotes on later pages keep the class default.
+\let\rj@defaultfootnoterule\footnoterule
+\renewcommand{\footnoterule}{%
+  \ifnum\value{page}=1\relax
+    \kern-3pt
+    \hbox to \columnwidth{\hskip2em\rule{7em}{0.4pt}\hfil}%
+    \kern3pt
+  \else
+    \rj@defaultfootnoterule
+  \fi
+}
 
 \newcommand{\rjmaketitle}{%
   \thispagestyle{fancy}%
   \begingroup
   \setlength{\parindent}{0pt}%
+  \global\rj@fundplacedfalse
+  \rj@reservefirstpagefund
+  \vspace*{12pt}%
   {\sihao\hei \@rjtitle\par}
   \vspace{8pt}
   {\xiaosihao\fs \@rjauthor\par}
@@ -128,17 +167,31 @@
     {\xiaowuhao\noindent\hei 关键词:\hspace{1em}\kai \@rjkeywords\par}%
   }%
   \vspace{4pt}
-  \rj@ifnotempty{\@rjclc}{\rj@frontpara{\xiaowuhao 中图法分类号:}{\xiaowuhao \@rjclc}}%
+  \rj@ifnotempty{\@rjclc}{%
+    {\xiaowuhao\noindent\hei 中图法分类号:\hspace{1em}\kai \@rjclc\par}%
+  }%
+  \vspace{10pt}
   \rj@ifnotempty{\@rjcncite}{\rj@frontpara{\rjcitefont 中文引用格式:}{\rjcitefont \@rjcncite}}%
   \rj@ifnotempty{\@rjencite}{\rj@frontpara{\rjcitefont 英文引用格式:}{\rjcitefont \@rjencite}}%
+  \vspace{10pt}
   \vspace{8pt}
   \rj@ifnotempty{\@rjetitle}{{\wuhao\bfseries \@rjetitle\par}\vspace{5pt}}%
   \rj@ifnotempty{\@rjeauthor}{{\xiaowuhao \@rjeauthor\par}\vspace{3pt}}%
   \rj@ifnotempty{\@rjeinfor}{{\rjengabsfont \@rjeinfor\par}\vspace{5pt}}%
   \rj@ifnotempty{\@rjeabstracttext}{{\rjengabsfont\noindent\textbf{Abstract}: \@rjeabstracttext\par}\vspace{3pt}}%
   \rj@ifnotempty{\@rjekeywords}{{\rjengabsfont\noindent\textbf{Key words}: \@rjekeywords\par}}%
-  \vspace{10pt}
+  \vspace{10pt}%
   \endgroup
+}
+
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \renewcommand{\headrulewidth}{0pt}
+  \fancyhead[LO]{\ifthenelse{\value{page}=1}{\parbox[b][0pt][t]{0.62\textwidth}{\vspace*{1pt}\rjheaderfont 软件学报ISSN 1000-9825, CODEN RUXUEW\\\textit{Journal of Software}, [doi: 10.13328/j.cnki.jos.000000]\\\copyright 中国科学院软件研究所版权所有.}}{\xiaowuhao\kai \@rjshorttitle}}
+  \fancyhead[RO]{\ifthenelse{\value{page}=1}{\parbox[b][0pt][t]{0.28\textwidth}{\vspace*{1pt}\raggedleft\rjheaderfont E-mail: jos@iscas.ac.cn\\http://www.jos.org.cn\\Tel: +86-10-62562563}}{\thepage}}
+  \fancyhead[LE]{\thepage}
+  \fancyhead[RE]{\xiaowuhao\kai 软件学报 20XX年第XX卷第XX期}
+  \fancyfoot[C]{}
 }
 
 % Back matter blocks.
@@ -148,12 +201,6 @@
     {\xiaowuhao\noindent\hei 作者简介\par}
     {\rjbibfont \@rjauthorsbio\par}
   }%
-  % \rj@ifnotempty{\@rjfund}{%
-  %   \vspace{4pt}{\rjbibfont\noindent\textsuperscript{*}\quad 基金项目: \@rjfund\par}%
-  % }%
-  % \rj@ifnotempty{\@rjdates}{%
-  %   {\rjbibfont\noindent 收稿时间: \@rjdates\par}%
-  % }%
 }
 
 % Legacy environment kept for older sources; new papers should use \rjabstracttext.
@@ -165,10 +212,20 @@
 \titlespacing*{\section}{0pt}{8pt}{6pt}
 \titleformat{\subsection}{\heiti\xiaowuhao}{\thesubsection}{1em}{}
 \titlespacing*{\subsection}{0pt}{5pt}{3pt}
+\titleformat{\subsubsection}{\heiti\xiaowuhao}{\thesubsubsection}{1em}{}
+\titlespacing*{\subsubsection}{0pt}{4pt}{2pt}
 \renewcommand{\thesection}{\arabic{section}}
 \renewcommand{\thesubsection}{\thesection.\arabic{subsection}}
+\renewcommand{\thesubsubsection}{\thesubsection.\arabic{subsubsection}}
 
-\captionsetup{font={small},labelfont=normal,labelsep=quad,skip=4pt}
+\captionsetup{
+    font={small},
+    labelfont={small,normal},
+    textfont={small,normal},
+    labelsep=quad,
+    skip=4pt
+}
+
 \AtBeginEnvironment{tabular}{\xiaowuhao}
 \AtBeginEnvironment{thebibliography}{%
   \rjbibfont
@@ -180,8 +237,9 @@
 \pagestyle{fancy}
 \fancyhf{}
 \renewcommand{\headrulewidth}{0pt}
-\fancyhead[LO]{\ifthenelse{\value{page}=1}{\rjheaderfont 软件学报ISSN 1000-9825, CODEN RUXUEW\\\textit{Journal of Software}, [doi: 10.13328/j.cnki.jos.000000]\\\copyright 中国科学院软件研究所版权所有.}{\xiaowuhao\kai \@rjshorttitle}}
-\fancyhead[RO]{\ifthenelse{\value{page}=1}{\rjheaderfont E-mail: jos@iscas.ac.cn\\http://www.jos.org.cn\\Tel: +86-10-62562563}{\thepage}}
+\fancyhead[LO]{\ifthenelse{\value{page}=1}{\parbox[b][0pt][t]{0.62\textwidth}{\vspace*{1pt}\rjheaderfont 软件学报ISSN 1000-9825, CODEN RUXUEW\\\textit{Journal of Software}, [doi: 10.13328/j.cnki.jos.000000]\\\copyright 中国科学院软件研究所版权所有.}}{\xiaowuhao\kai \@rjshorttitle}}
+\fancyhead[RO]{\ifthenelse{\value{page}=1}{\parbox[b][0pt][t]{0.28\textwidth}{\vspace*{1pt}\raggedleft\rjheaderfont E-mail: jos@iscas.ac.cn\\http://www.jos.org.cn\\Tel: +86-10-62562563}}{\thepage}}
 \fancyhead[LE]{\thepage}
-\fancyhead[RE]{\xiaowuhao\textit{Journal of Software} \kai 软件学报}
+\fancyhead[RE]{\xiaowuhao\kai 软件学报 20XX年第XX卷第XX期}
+\fancyfoot[C]{}
 \setlength{\headheight}{36pt}

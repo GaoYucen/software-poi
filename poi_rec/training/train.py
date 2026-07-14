@@ -162,7 +162,7 @@ def _ensure_processed(config: dict[str, Any]) -> None:
         text_encoder=str(config.get("semantic_encoder", config.get("text_encoder", "tfidf_svd"))),
         text_embedding_dim=int(config.get("text_embedding_dim", 64)),
         text_model_name=config.get("text_model_name"),
-        seed=int(config.get("seed", 42)),
+        seed=int(config.get("preprocess_seed", config.get("seed", 42))),
     )
     expected_fingerprint = preprocess_fingerprint(preprocess_config)
     if metadata_path.exists():
